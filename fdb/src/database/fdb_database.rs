@@ -105,8 +105,10 @@ impl FdbDatabase {
             }
         }
 
-        tr.set_option(TransactionOption::ReadSystemKeys)?;
-        tr.set_option(TransactionOption::LockAware)?;
+        unsafe {
+            tr.set_option(TransactionOption::ReadSystemKeys)?;
+            tr.set_option(TransactionOption::LockAware)?;
+        }
 
         let range = Range::new(
             {

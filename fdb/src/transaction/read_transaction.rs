@@ -188,8 +188,13 @@ pub trait ReadTransaction {
 
     /// Set options on a [`Transaction`] or [`ReadTransaction`]
     ///
+    /// # Safety
+    ///
+    /// Setting transaction timeout or retry limits can cause
+    /// transactions to fail in an inconsistent state.
+    ///
     /// [`Transaction`]: crate::transaction::Transaction
-    fn set_option(&self, option: TransactionOption) -> FdbResult<()>;
+    unsafe fn set_option(&self, option: TransactionOption) -> FdbResult<()>;
 
     /// Directly sets the version of the database at which to execute
     /// reads.

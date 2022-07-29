@@ -33,7 +33,9 @@ impl TenantManagement {
         let key_ref = &key;
 
         db.run(|tr| async move {
-            tr.set_option(TransactionOption::SpecialKeySpaceEnableWrites)?;
+            unsafe {
+                tr.set_option(TransactionOption::SpecialKeySpaceEnableWrites)?;
+            }
 
             if checked_existence_ref.load(Ordering::SeqCst) {
                 tr.set(key_ref.clone(), Bytes::new());
@@ -60,7 +62,9 @@ impl TenantManagement {
 
     /// Creates a new tenant in the cluster.
     pub fn create_tenant_tr(tr: &FdbTransaction, tenant_name: impl Into<Tenant>) -> FdbResult<()> {
-        tr.set_option(TransactionOption::SpecialKeySpaceEnableWrites)?;
+        unsafe {
+            tr.set_option(TransactionOption::SpecialKeySpaceEnableWrites)?;
+        }
 
         tr.set(
             {
@@ -93,7 +97,9 @@ impl TenantManagement {
         let key_ref = &key;
 
         db.run(|tr| async move {
-            tr.set_option(TransactionOption::SpecialKeySpaceEnableWrites)?;
+            unsafe {
+                tr.set_option(TransactionOption::SpecialKeySpaceEnableWrites)?;
+            }
 
             if checked_existence_ref.load(Ordering::SeqCst) {
                 tr.clear(key_ref.clone());
@@ -120,7 +126,9 @@ impl TenantManagement {
 
     /// Deletes a tenant from the cluster.
     pub fn delete_tenant_tr(tr: &FdbTransaction, tenant_name: impl Into<Tenant>) -> FdbResult<()> {
-        tr.set_option(TransactionOption::SpecialKeySpaceEnableWrites)?;
+        unsafe {
+            tr.set_option(TransactionOption::SpecialKeySpaceEnableWrites)?;
+        }
 
         tr.clear({
             let mut b = BytesMut::new();

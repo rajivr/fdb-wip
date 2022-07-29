@@ -289,7 +289,7 @@ impl ReadTransaction for FdbTransaction {
         internal::read_transaction::get_read_version(self.get_c_api_ptr())
     }
 
-    fn set_option(&self, option: TransactionOption) -> FdbResult<()> {
+    unsafe fn set_option(&self, option: TransactionOption) -> FdbResult<()> {
         internal::read_transaction::set_option(self.get_c_api_ptr(), option)
     }
 
@@ -599,7 +599,7 @@ impl ReadTransaction for FdbReadTransaction {
         self.inner.get_read_version()
     }
 
-    fn set_option(&self, option: TransactionOption) -> FdbResult<()> {
+    unsafe fn set_option(&self, option: TransactionOption) -> FdbResult<()> {
         self.inner.set_option(option)
     }
 
@@ -772,11 +772,11 @@ pub(super) mod internal {
             FdbFuture::new(unsafe { fdb_sys::fdb_transaction_get_read_version(transaction) })
         }
 
-        pub(crate) fn set_option(
+        pub(crate) unsafe fn set_option(
             transaction: *mut fdb_sys::FDBTransaction,
             option: TransactionOption,
         ) -> FdbResult<()> {
-            unsafe { option.apply(transaction) }
+            option.apply(transaction)
         }
 
         pub(crate) fn set_read_version(transaction: *mut fdb_sys::FDBTransaction, version: i64) {
