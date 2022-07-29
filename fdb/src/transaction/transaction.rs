@@ -38,7 +38,7 @@ use crate::{Key, Value};
 /// Keys and values in FDB are byte arrays. To encode other data
 /// types, see the [tuple layer] documentation.
 ///
-/// **Note**: All keys with first byte `0xff` are reserved for
+/// **Note**: All keys with first byte `0xFF` are reserved for
 /// internal use.
 ///
 /// [conflicts]: https://apple.github.io/foundationdb/developer-guide.html#developer-guide-transaction-conflicts
