@@ -21,6 +21,10 @@ use crate::future::FdbStreamMappedKeyValue;
 
 pub use crate::option::StreamingMode;
 
+/// When passed to [`RangeOptions::set_limit`], indicates that the
+/// query should return unlimited rows.
+pub const KEYVALUE_LIMIT_UNLIMITED: i32 = 0;
+
 /// [`Range`] describes an exact range of keyspace, specified by a
 /// begin and end key.
 ///
