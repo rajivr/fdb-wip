@@ -409,17 +409,15 @@ impl FdbFutureGet for KeyValueArray {
             (0..out_count).into_iter().for_each(|i| {
                 let kv = out_kv.offset(i.try_into().unwrap());
 
-                let key = Bytes::copy_from_slice(slice::from_raw_parts(
+                let key = Key::from(Bytes::copy_from_slice(slice::from_raw_parts(
                     (*kv).key,
                     (*kv).key_length.try_into().unwrap(),
-                ))
-                .into();
+                )));
 
-                let value = Bytes::copy_from_slice(slice::from_raw_parts(
+                let value = Value::from(Bytes::copy_from_slice(slice::from_raw_parts(
                     (*kv).value,
                     (*kv).value_length.try_into().unwrap(),
-                ))
-                .into();
+                )));
 
                 kvs.push(KeyValue::new(key, value));
             });
@@ -453,17 +451,15 @@ impl FdbFutureGet for MappedKeyValueArray {
                 let mkv = out_mkv.offset(i.try_into().unwrap());
 
                 let key_value = {
-                    let key = Bytes::copy_from_slice(slice::from_raw_parts(
+                    let key = Key::from(Bytes::copy_from_slice(slice::from_raw_parts(
                         (*mkv).key.key,
                         (*mkv).key.key_length.try_into().unwrap(),
-                    ))
-                    .into();
+                    )));
 
-                    let value = Bytes::copy_from_slice(slice::from_raw_parts(
+                    let value = Value::from(Bytes::copy_from_slice(slice::from_raw_parts(
                         (*mkv).value.key,
                         (*mkv).value.key_length.try_into().unwrap(),
-                    ))
-                    .into();
+                    )));
 
                     KeyValue::new(key, value)
                 };
@@ -492,17 +488,15 @@ impl FdbFutureGet for MappedKeyValueArray {
                 (0..range_result_count).into_iter().for_each(|j| {
                     let kv = (*mkv).getRange.data.offset(j.try_into().unwrap());
 
-                    let key = Bytes::copy_from_slice(slice::from_raw_parts(
+                    let key = Key::from(Bytes::copy_from_slice(slice::from_raw_parts(
                         (*kv).key,
                         (*kv).key_length.try_into().unwrap(),
-                    ))
-                    .into();
+                    )));
 
-                    let value = Bytes::copy_from_slice(slice::from_raw_parts(
+                    let value = Value::from(Bytes::copy_from_slice(slice::from_raw_parts(
                         (*kv).value,
                         (*kv).value_length.try_into().unwrap(),
-                    ))
-                    .into();
+                    )));
 
                     range_result.push(KeyValue::new(key, value));
                 });

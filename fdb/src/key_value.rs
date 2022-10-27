@@ -49,6 +49,14 @@ pub struct KeyValue {
 }
 
 impl KeyValue {
+    /// Construct a new [`KeyValue`].
+    pub fn new(key: impl Into<Key>, value: impl Into<Value>) -> KeyValue {
+        KeyValue {
+            key: key.into(),
+            value: value.into(),
+        }
+    }
+
     /// Gets a reference to [`Key`] from [`KeyValue`].
     pub fn get_key_ref(&self) -> &Key {
         &self.key
@@ -72,10 +80,6 @@ impl KeyValue {
     /// Extract [`Key`] and [`Value`] from [`KeyValue`].
     pub fn into_parts(self) -> (Key, Value) {
         (self.key, self.value)
-    }
-
-    pub(crate) fn new(key: Key, value: Value) -> KeyValue {
-        KeyValue { key, value }
     }
 }
 
