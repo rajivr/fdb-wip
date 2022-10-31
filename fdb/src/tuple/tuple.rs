@@ -62,6 +62,24 @@ mod private {
     impl SealedPush for Null {}
     impl SealedPush for Versionstamp {}
     impl SealedPush for Tuple {}
+
+    pub trait SealedPop {}
+
+    impl SealedPop for BigInt {}
+    impl SealedPop for Bytes {}
+    impl SealedPop for String {}
+    impl SealedPop for Uuid {}
+    impl SealedPop for bool {}
+    impl SealedPop for f32 {}
+    impl SealedPop for f64 {}
+    impl SealedPop for i16 {}
+    impl SealedPop for i32 {}
+    impl SealedPop for i64 {}
+    impl SealedPop for i8 {}
+
+    impl SealedPop for Null {}
+    impl SealedPop for Versionstamp {}
+    impl SealedPop for Tuple {}
 }
 
 /// Used by [`Tuple::get`] method.
@@ -243,7 +261,6 @@ impl<'a> TupleElementGet<'a> for i64 {
                         i64::try_from(-Into::<i128>::into(*i)).unwrap(),
                     )
                 }
-
                 TupleValue::NegInt4(ref i) if (2147483649..=4294967295).contains(i) => {
                     Some(-Into::<i64>::into(*i))
                 }
@@ -893,6 +910,175 @@ impl TupleElementPush for Tuple {
     }
 }
 
+/// Used by [`Tuple::pop_back`] and [`Tuple::pop_front`] methods.
+pub trait TupleElementPop: private::SealedPop {
+    #[doc(hidden)]
+    fn pop_back(tuple: &mut Tuple) -> Option<Self>
+    where
+        Self: Sized;
+}
+
+impl TupleElementPop for BigInt {
+    fn pop_back(tuple: &mut Tuple) -> Option<BigInt> {
+        tuple
+            .elements
+            .pop_back()
+            .and_then(|tail| BigInt::try_from(tail).ok())
+    }
+}
+
+impl TupleElementPop for Bytes {
+    fn pop_back(tuple: &mut Tuple) -> Option<Bytes> {
+        tuple
+            .elements
+            .pop_back()
+            .and_then(|tail| Bytes::try_from(tail).ok())
+    }
+}
+
+impl TupleElementPop for String {
+    fn pop_back(tuple: &mut Tuple) -> Option<String> {
+        tuple
+            .elements
+            .pop_back()
+            .and_then(|tail| String::try_from(tail).ok())
+    }
+}
+
+impl TupleElementPop for Uuid {
+    fn pop_back(tuple: &mut Tuple) -> Option<Uuid> {
+        tuple
+            .elements
+            .pop_back()
+            .and_then(|tail| Uuid::try_from(tail).ok())
+    }
+}
+
+impl TupleElementPop for bool {
+    fn pop_back(tuple: &mut Tuple) -> Option<bool> {
+        tuple
+            .elements
+            .pop_back()
+            .and_then(|tail| bool::try_from(tail).ok())
+    }
+}
+
+impl TupleElementPop for f32 {
+    fn pop_back(tuple: &mut Tuple) -> Option<f32> {
+        tuple
+            .elements
+            .pop_back()
+            .and_then(|tail| f32::try_from(tail).ok())
+    }
+}
+
+impl TupleElementPop for f64 {
+    fn pop_back(tuple: &mut Tuple) -> Option<f64> {
+        tuple
+            .elements
+            .pop_back()
+            .and_then(|tail| f64::try_from(tail).ok())
+    }
+}
+
+impl TupleElementPop for i16 {
+    fn pop_back(tuple: &mut Tuple) -> Option<i16> {
+        tuple
+            .elements
+            .pop_back()
+            .and_then(|tail| i16::try_from(tail).ok())
+    }
+}
+
+impl TupleElementPop for i32 {
+    fn pop_back(tuple: &mut Tuple) -> Option<i32> {
+        tuple
+            .elements
+            .pop_back()
+            .and_then(|tail| i32::try_from(tail).ok())
+    }
+}
+
+impl TupleElementPop for i64 {
+    fn pop_back(tuple: &mut Tuple) -> Option<i64> {
+        tuple
+            .elements
+            .pop_back()
+            .and_then(|tail| i64::try_from(tail).ok())
+    }
+}
+
+impl TupleElementPop for i8 {
+    fn pop_back(tuple: &mut Tuple) -> Option<i8> {
+        tuple
+            .elements
+            .pop_back()
+            .and_then(|tail| i8::try_from(tail).ok())
+    }
+}
+
+impl TupleElementPop for Null {
+    fn pop_back(tuple: &mut Tuple) -> Option<Null> {
+        tuple
+            .elements
+            .pop_back()
+            .and_then(|tail| Null::try_from(tail).ok())
+    }
+}
+
+impl TupleElementPop for Versionstamp {
+    fn pop_back(tuple: &mut Tuple) -> Option<Versionstamp> {
+        tuple.elements.pop_back().and_then(|tail| {
+            Versionstamp::try_from(tail)
+                .map(|versionstamp| {
+                    // `TupleValue` was
+                    // `TupleValue::Versionstamp96Bit`. We need to
+                    // recalculate if we have a complete or incomplete
+                    // versionstamp.
+                    let has_incomplete_versionstamp =
+                        tuple.elements.iter().fold(false, |acc, x| match *x {
+                            TupleValue::NestedTuple(ref t) => {
+                                acc || t.has_incomplete_versionstamp()
+                            }
+                            TupleValue::Versionstamp96Bit(ref vs) => acc || (!vs.is_complete()),
+                            _ => acc,
+                        });
+
+                    tuple.has_incomplete_versionstamp = has_incomplete_versionstamp;
+
+                    versionstamp
+                })
+                .ok()
+        })
+    }
+}
+
+impl TupleElementPop for Tuple {
+    fn pop_back(tuple: &mut Tuple) -> Option<Tuple> {
+        tuple.elements.pop_back().and_then(|tail| {
+            Tuple::try_from(tail)
+                .map(|tuple_inner| {
+                    // `TupleValue` was `TupleValue::NestedTuple`. We
+                    // need to recalculate if we have a complete or
+                    // incomplete versionstamp.
+                    let has_incomplete_versionstamp =
+                        tuple.elements.iter().fold(false, |acc, x| match *x {
+                            TupleValue::NestedTuple(ref t) => {
+                                acc || t.has_incomplete_versionstamp()
+                            }
+                            TupleValue::Versionstamp96Bit(ref vs) => acc || (!vs.is_complete()),
+                            _ => acc,
+                        });
+
+                    tuple.has_incomplete_versionstamp = has_incomplete_versionstamp;
+
+                    tuple_inner
+                })
+                .ok()
+        })
+    }
+}
+
 /// Represents a set of elements that make up a sortable, typed key.
 ///
 /// [`Tuple`] is comparable with other [`Tuple`]s and will sort in
@@ -954,6 +1140,15 @@ impl Tuple {
         T: TupleElementGet<'a> + 'a,
     {
         TupleElementGet::get(self, index)
+    }
+
+    /// Removes the last element from the [`Tuple`] and returns it, or
+    /// `None` if it is empty.
+    pub fn pop_back<T>(&mut self) -> Option<T>
+    where
+        T: TupleElementPop,
+    {
+        TupleElementPop::pop_back(self)
     }
 
     /// Appends a [`Tuple`] element.
@@ -1217,6 +1412,343 @@ mod tests {
                 t
             })
         );
+    }
+
+    #[test]
+    fn pop_back_bigint() {
+        let mut t = Tuple::new();
+
+        t.push_front::<BigInt>(BigInt::parse_bytes(b"-18446744073709551616", 10).unwrap());
+        t.push_front::<BigInt>(BigInt::parse_bytes(b"-18446744073709551615", 10).unwrap());
+        t.push_front::<BigInt>(BigInt::parse_bytes(b"-9223372036854775809", 10).unwrap());
+        t.push_front::<BigInt>(BigInt::parse_bytes(b"-9223372036854775808", 10).unwrap()); // i64::MIN
+        t.push_front::<BigInt>(BigInt::parse_bytes(b"9223372036854775807", 10).unwrap()); // i64::MAX
+        t.push_front::<BigInt>(BigInt::parse_bytes(b"9223372036854775808", 10).unwrap());
+        t.push_front::<BigInt>(BigInt::parse_bytes(b"18446744073709551615", 10).unwrap());
+        t.push_front::<BigInt>(BigInt::parse_bytes(b"18446744073709551616", 10).unwrap());
+
+        assert_eq!(
+            Some(BigInt::parse_bytes(b"-18446744073709551616", 10).unwrap()),
+            t.pop_back::<BigInt>()
+        );
+        assert_eq!(
+            Some(BigInt::parse_bytes(b"-18446744073709551615", 10).unwrap()),
+            t.pop_back::<BigInt>()
+        );
+        assert_eq!(
+            Some(BigInt::parse_bytes(b"-9223372036854775809", 10).unwrap()),
+            t.pop_back::<BigInt>()
+        );
+        assert_eq!(
+            Some(BigInt::parse_bytes(b"-9223372036854775808", 10).unwrap()),
+            t.pop_back::<BigInt>()
+        );
+        assert_eq!(
+            Some(BigInt::parse_bytes(b"9223372036854775807", 10).unwrap()),
+            t.pop_back::<BigInt>()
+        );
+        assert_eq!(
+            Some(BigInt::parse_bytes(b"9223372036854775808", 10).unwrap()),
+            t.pop_back::<BigInt>()
+        );
+        assert_eq!(
+            Some(BigInt::parse_bytes(b"18446744073709551615", 10).unwrap()),
+            t.pop_back::<BigInt>()
+        );
+        assert_eq!(
+            Some(BigInt::parse_bytes(b"18446744073709551616", 10).unwrap()),
+            t.pop_back::<BigInt>()
+        );
+        assert_eq!(None, t.pop_back::<BigInt>());
+
+        assert_eq!(t.size(), 0);
+    }
+
+    #[test]
+    fn pop_back_bytes() {
+        let mut t = Tuple::new();
+
+        t.push_front::<Bytes>(Bytes::from_static(b"hello_world"));
+
+        assert_eq!(
+            Some(Bytes::from_static(b"hello_world")),
+            t.pop_back::<Bytes>()
+        );
+        assert_eq!(None, t.pop_back::<Bytes>());
+
+        assert_eq!(t.size(), 0);
+    }
+
+    #[test]
+    fn pop_back_string() {
+        let mut t = Tuple::new();
+
+        t.push_front::<String>("hello world".to_string());
+
+        assert_eq!(Some("hello world".to_string()), t.pop_back::<String>());
+        assert_eq!(None, t.pop_back::<String>());
+
+        assert_eq!(t.size(), 0);
+    }
+
+    #[test]
+    fn pop_back_uuid() {
+        let mut t = Tuple::new();
+
+        t.push_front::<Uuid>(Uuid::parse_str("ffffffff-ba5e-ba11-0000-00005ca1ab1e").unwrap());
+
+        assert_eq!(
+            Some(Uuid::parse_str("ffffffff-ba5e-ba11-0000-00005ca1ab1e").unwrap()),
+            t.pop_back::<Uuid>()
+        );
+        assert_eq!(None, t.pop_back::<Uuid>());
+
+        assert_eq!(t.size(), 0);
+    }
+
+    #[test]
+    fn pop_back_bool() {
+        let mut t = Tuple::new();
+
+        t.push_front::<bool>(true);
+        t.push_front::<bool>(false);
+
+        assert_eq!(Some(true), t.pop_back::<bool>());
+        assert_eq!(Some(false), t.pop_back::<bool>());
+        assert_eq!(None, t.pop_back::<bool>());
+
+        assert_eq!(t.size(), 0);
+    }
+
+    // `3.14` is copied from Java binding tests
+    #[allow(clippy::approx_constant)]
+    #[test]
+    fn pop_back_f32() {
+        let mut t = Tuple::new();
+
+        t.push_front::<f32>(3.14f32);
+
+        assert_eq!(Some(3.14f32), t.pop_back::<f32>());
+        assert_eq!(None, t.pop_back::<f32>());
+
+        assert_eq!(t.size(), 0);
+    }
+
+    // `3.14` is copied from Java binding tests
+    #[allow(clippy::approx_constant)]
+    #[test]
+    fn pop_back_f64() {
+        let mut t = Tuple::new();
+
+        t.push_front::<f64>(-3.14f64);
+
+        assert_eq!(Some(-3.14f64), t.pop_back::<f64>());
+        assert_eq!(None, t.pop_back::<f64>());
+
+        assert_eq!(t.size(), 0);
+    }
+
+    #[test]
+    fn pop_back_i16() {
+        let mut t = Tuple::new();
+
+        t.push_front::<i16>(i16::MIN);
+        t.push_front::<i16>(-256);
+        t.push_front::<i16>(-255);
+        t.push_front::<i16>(-129);
+        t.push_front::<i16>(-128); // i8::MIN
+        t.push_front::<i16>(127); // i8::MAX
+        t.push_front::<i16>(128);
+        t.push_front::<i16>(255);
+        t.push_front::<i16>(256);
+        t.push_front::<i16>(i16::MAX);
+
+        assert_eq!(Some(i16::MIN), t.pop_back::<i16>());
+        assert_eq!(Some(-256), t.pop_back::<i16>());
+        assert_eq!(Some(-255), t.pop_back::<i16>());
+        assert_eq!(Some(-129), t.pop_back::<i16>());
+        assert_eq!(Some(-128), t.pop_back::<i16>());
+        assert_eq!(Some(127), t.pop_back::<i16>());
+        assert_eq!(Some(128), t.pop_back::<i16>());
+        assert_eq!(Some(255), t.pop_back::<i16>());
+        assert_eq!(Some(256), t.pop_back::<i16>());
+        assert_eq!(Some(i16::MAX), t.pop_back::<i16>());
+        assert_eq!(None, t.pop_back::<i16>());
+
+        assert_eq!(t.size(), 0);
+    }
+
+    #[test]
+    fn pop_back_i32() {
+        let mut t = Tuple::new();
+
+        t.push_front::<i32>(i32::MIN);
+        t.push_front::<i32>(-16777216);
+        t.push_front::<i32>(-16777215);
+        t.push_front::<i32>(-65536);
+        t.push_front::<i32>(-65535);
+        t.push_front::<i32>(-32769);
+        t.push_front::<i32>(-32768); // i16::MIN
+        t.push_front::<i32>(32767); // i16::MAX
+        t.push_front::<i32>(32768);
+        t.push_front::<i32>(65535);
+        t.push_front::<i32>(65536);
+        t.push_front::<i32>(16777215);
+        t.push_front::<i32>(16777216);
+        t.push_front::<i32>(i32::MAX);
+
+        assert_eq!(Some(i32::MIN), t.pop_back::<i32>());
+        assert_eq!(Some(-16777216), t.pop_back::<i32>());
+        assert_eq!(Some(-16777215), t.pop_back::<i32>());
+        assert_eq!(Some(-65536), t.pop_back::<i32>());
+        assert_eq!(Some(-65535), t.pop_back::<i32>());
+        assert_eq!(Some(-32769), t.pop_back::<i32>());
+        assert_eq!(Some(-32768), t.pop_back::<i32>());
+        assert_eq!(Some(32767), t.pop_back::<i32>());
+        assert_eq!(Some(32768), t.pop_back::<i32>());
+        assert_eq!(Some(65535), t.pop_back::<i32>());
+        assert_eq!(Some(65536), t.pop_back::<i32>());
+        assert_eq!(Some(16777215), t.pop_back::<i32>());
+        assert_eq!(Some(16777216), t.pop_back::<i32>());
+        assert_eq!(Some(i32::MAX), t.pop_back::<i32>());
+        assert_eq!(None, t.pop_back::<i32>());
+
+        assert_eq!(t.size(), 0);
+    }
+
+    #[test]
+    fn pop_back_i64() {
+        let mut t = Tuple::new();
+
+        t.push_front::<i64>(i64::MIN);
+        t.push_front::<i64>(-72057594037927936);
+        t.push_front::<i64>(-72057594037927935);
+        t.push_front::<i64>(-281474976710656);
+        t.push_front::<i64>(-281474976710655);
+        t.push_front::<i64>(-1099511627776);
+        t.push_front::<i64>(-1099511627775);
+        t.push_front::<i64>(-4294967296);
+        t.push_front::<i64>(-4294967295);
+        t.push_front::<i64>(-2147483649);
+        t.push_front::<i64>(-2147483648); // i32::MIN
+        t.push_front::<i64>(2147483647); // i32::MAX
+        t.push_front::<i64>(2147483648);
+        t.push_front::<i64>(4294967295);
+        t.push_front::<i64>(4294967296);
+        t.push_front::<i64>(1099511627775);
+        t.push_front::<i64>(1099511627776);
+        t.push_front::<i64>(281474976710655);
+        t.push_front::<i64>(281474976710656);
+        t.push_front::<i64>(72057594037927935);
+        t.push_front::<i64>(72057594037927936);
+        t.push_front::<i64>(i64::MAX);
+
+        assert_eq!(Some(i64::MIN), t.pop_back::<i64>());
+        assert_eq!(Some(-72057594037927936), t.pop_back::<i64>());
+        assert_eq!(Some(-72057594037927935), t.pop_back::<i64>());
+        assert_eq!(Some(-281474976710656), t.pop_back::<i64>());
+        assert_eq!(Some(-281474976710655), t.pop_back::<i64>());
+        assert_eq!(Some(-1099511627776), t.pop_back::<i64>());
+        assert_eq!(Some(-1099511627775), t.pop_back::<i64>());
+        assert_eq!(Some(-4294967296), t.pop_back::<i64>());
+        assert_eq!(Some(-4294967295), t.pop_back::<i64>());
+        assert_eq!(Some(-2147483649), t.pop_back::<i64>());
+        assert_eq!(Some(-2147483648), t.pop_back::<i64>());
+        assert_eq!(Some(2147483647), t.pop_back::<i64>());
+        assert_eq!(Some(2147483648), t.pop_back::<i64>());
+        assert_eq!(Some(4294967295), t.pop_back::<i64>());
+        assert_eq!(Some(4294967296), t.pop_back::<i64>());
+        assert_eq!(Some(1099511627775), t.pop_back::<i64>());
+        assert_eq!(Some(1099511627776), t.pop_back::<i64>());
+        assert_eq!(Some(281474976710655), t.pop_back::<i64>());
+        assert_eq!(Some(281474976710656), t.pop_back::<i64>());
+        assert_eq!(Some(72057594037927935), t.pop_back::<i64>());
+        assert_eq!(Some(72057594037927936), t.pop_back::<i64>());
+        assert_eq!(Some(i64::MAX), t.pop_back::<i64>());
+        assert_eq!(None, t.pop_back::<i64>());
+
+        assert_eq!(t.size(), 0);
+    }
+
+    #[test]
+    fn pop_back_i8() {
+        let mut t = Tuple::new();
+
+        t.push_front::<i8>(i8::MIN);
+        t.push_front::<i8>(0);
+        t.push_front::<i8>(i8::MAX);
+
+        assert_eq!(Some(i8::MIN), t.pop_back::<i8>());
+        assert_eq!(Some(0), t.pop_back::<i8>());
+        assert_eq!(Some(i8::MAX), t.pop_back::<i8>());
+        assert_eq!(None, t.pop_back::<i8>());
+
+        assert_eq!(t.size(), 0);
+    }
+
+    #[test]
+    fn pop_back_null() {
+        let mut t = Tuple::new();
+
+        t.push_front::<Null>(Null);
+
+        assert_eq!(Some(Null), t.pop_back::<Null>());
+        assert_eq!(None, t.pop_back::<Null>());
+
+        assert_eq!(t.size(), 0);
+    }
+
+    #[test]
+    fn pop_back_tuple() {
+        let mut t = Tuple::new();
+
+        t.push_front::<Tuple>({
+            let mut t1 = Tuple::new();
+            t1.push_back::<Versionstamp>(Versionstamp::incomplete(0));
+            t1
+        });
+        t.push_front::<BigInt>(BigInt::parse_bytes(b"0", 10).unwrap());
+        t.push_front::<Versionstamp>(Versionstamp::complete(
+            Bytes::from_static(&b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"[..]),
+            657,
+        ));
+
+        assert!(t.has_incomplete_versionstamp());
+
+        assert_eq!(
+            Some({
+                let mut t1 = Tuple::new();
+                t1.push_back::<Versionstamp>(Versionstamp::incomplete(0));
+                t1
+            }),
+            t.pop_back::<Tuple>()
+        );
+
+        assert!(!t.has_incomplete_versionstamp());
+
+        assert_eq!(t.size(), 2);
+    }
+
+    #[test]
+    fn pop_back_versionstamp() {
+        let mut t = Tuple::new();
+
+        t.push_front::<Versionstamp>(Versionstamp::incomplete(0));
+        t.push_front::<Versionstamp>(Versionstamp::complete(
+            Bytes::from_static(&b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"[..]),
+            657,
+        ));
+
+        assert!(t.has_incomplete_versionstamp());
+
+        assert_eq!(
+            Some(Versionstamp::incomplete(0)),
+            t.pop_back::<Versionstamp>()
+        );
+
+        assert!(!t.has_incomplete_versionstamp());
+
+        assert_eq!(t.size(), 1);
     }
 
     #[test]

@@ -19,5 +19,5 @@ mod tuple;
 pub mod key_util;
 
 pub use null::Null;
-pub use tuple::{Tuple, TupleElementGet, TupleElementPush};
+pub use tuple::{Tuple, TupleElementGet, TupleElementPop, TupleElementPush};
 pub use versionstamp::Versionstamp;

@@ -2,8 +2,10 @@ use bytes::{BufMut, Bytes, BytesMut};
 use num_bigint::BigInt;
 use uuid::Uuid;
 
+use std::convert::TryFrom;
+
 use crate::error::{FdbError, FdbResult, TUPLE_TRY_FROM_BYTES};
-use crate::tuple::{Tuple, Versionstamp};
+use crate::tuple::{Null, Tuple, Versionstamp};
 
 // The specifications for FDB Tuple layer typecodes is here.
 // https://github.com/apple/foundationdb/blob/master/design/tuple.md
@@ -39,6 +41,291 @@ pub(crate) enum TupleValue {
     TrueValue,                                 // 0x27
     Rfc4122Uuid(Uuid),                         // 0x30
     Versionstamp96Bit(Versionstamp),           // 0x33
+}
+
+impl TryFrom<TupleValue> for BigInt {
+    type Error = ();
+
+    fn try_from(value: TupleValue) -> Result<BigInt, ()> {
+        i64::try_from(value.clone())
+            .map(|x| x.into())
+            .or_else(|_| match value {
+                TupleValue::NegativeArbitraryPrecisionInteger(ref i) => Ok(i.clone() * -1),
+                TupleValue::NegInt8(ref i)
+                    if (9223372036854775809..=18446744073709551615).contains(i) =>
+                {
+                    Ok(Into::<BigInt>::into(*i) * -1)
+                }
+                TupleValue::PosInt8(ref i)
+                    if (9223372036854775808..=18446744073709551615).contains(i) =>
+                {
+                    Ok((*i).into())
+                }
+                TupleValue::PositiveArbitraryPrecisionInteger(ref i) => Ok(i.clone()),
+                _ => Err(()),
+            })
+    }
+}
+
+impl TryFrom<TupleValue> for Bytes {
+    type Error = ();
+
+    fn try_from(value: TupleValue) -> Result<Bytes, ()> {
+        match value {
+            TupleValue::ByteString(b) => Ok(b),
+            _ => Err(()),
+        }
+    }
+}
+
+impl TryFrom<TupleValue> for String {
+    type Error = ();
+
+    fn try_from(value: TupleValue) -> Result<String, ()> {
+        match value {
+            TupleValue::UnicodeString(s) => Ok(s),
+            _ => Err(()),
+        }
+    }
+}
+
+impl TryFrom<TupleValue> for Uuid {
+    type Error = ();
+
+    fn try_from(value: TupleValue) -> Result<Uuid, ()> {
+        match value {
+            TupleValue::Rfc4122Uuid(u) => Ok(u),
+            _ => Err(()),
+        }
+    }
+}
+
+impl TryFrom<TupleValue> for bool {
+    type Error = ();
+
+    fn try_from(value: TupleValue) -> Result<bool, ()> {
+        match value {
+            TupleValue::FalseValue => Ok(false),
+            TupleValue::TrueValue => Ok(true),
+            _ => Err(()),
+        }
+    }
+}
+
+impl TryFrom<TupleValue> for f32 {
+    type Error = ();
+
+    fn try_from(value: TupleValue) -> Result<f32, ()> {
+        match value {
+            TupleValue::IeeeBinaryFloatingPointFloat(f) => Ok(f),
+            _ => Err(()),
+        }
+    }
+}
+
+impl TryFrom<TupleValue> for f64 {
+    type Error = ();
+
+    fn try_from(value: TupleValue) -> Result<f64, ()> {
+        match value {
+            TupleValue::IeeeBinaryFloatingPointDouble(d) => Ok(d),
+            _ => Err(()),
+        }
+    }
+}
+
+impl TryFrom<TupleValue> for i16 {
+    type Error = ();
+
+    fn try_from(value: TupleValue) -> Result<i16, ()> {
+        i8::try_from(value.clone())
+            .map(|x| x.into())
+            .or_else(|_| match value {
+                TupleValue::NegInt2(ref i) if (256..=32768).contains(i) => Ok(
+                    // Safety: Safe to unwrap here because we are
+                    //         checking for the range.
+                    i16::try_from(-Into::<i32>::into(*i)).unwrap(),
+                ),
+                TupleValue::NegInt1(ref i) if (129..=255).contains(i) => Ok(-Into::<i16>::into(*i)),
+                TupleValue::PosInt1(ref i) if (128..=255).contains(i) => Ok((*i).into()),
+                TupleValue::PosInt2(ref i) if (256..=32767).contains(i) => Ok(
+                    // Safety: Safe to unwrap here because we are checking
+                    //         for the range.
+                    i16::try_from(*i).unwrap(),
+                ),
+                _ => Err(()),
+            })
+    }
+}
+
+impl TryFrom<TupleValue> for i32 {
+    type Error = ();
+
+    fn try_from(value: TupleValue) -> Result<i32, ()> {
+        i16::try_from(value.clone())
+            .map(|x| x.into())
+            .or_else(|_| match value {
+                TupleValue::NegInt4(ref i) if (16777216..=2147483648).contains(i) => Ok(
+                    // Safety: Safe to unwrap here because we are
+                    //         checking for the range.
+                    i32::try_from(-Into::<i64>::into(*i)).unwrap(),
+                ),
+                TupleValue::NegInt3(ref i) if (65536..=16777215).contains(i) => Ok(
+                    // Safety: Safe to unwrap here because we are
+                    //         checking for the range.
+                    i32::try_from(-Into::<i64>::into(*i)).unwrap(),
+                ),
+                TupleValue::NegInt2(ref i) if (32769..=65535).contains(i) => {
+                    Ok(-Into::<i32>::into(*i))
+                }
+                TupleValue::PosInt2(ref i) if (32768..=65535).contains(i) => Ok((*i).into()),
+                TupleValue::PosInt3(ref i) if (65536..=16777215).contains(i) => Ok(
+                    // Safety: Safe to unwrap here because we are
+                    //         checking for the range.
+                    i32::try_from(*i).unwrap(),
+                ),
+                TupleValue::PosInt4(ref i) if (16777216..=2147483647).contains(i) => Ok(
+                    // Safety: Safe to unwrap here because we are
+                    //         checking for the range.
+                    i32::try_from(*i).unwrap(),
+                ),
+                _ => Err(()),
+            })
+    }
+}
+
+impl TryFrom<TupleValue> for i64 {
+    type Error = ();
+
+    fn try_from(value: TupleValue) -> Result<i64, ()> {
+        i32::try_from(value.clone())
+            .map(|x| x.into())
+            .or_else(|_| match value {
+                TupleValue::NegInt8(ref i)
+                    if (72057594037927936..=9223372036854775808).contains(i) =>
+                {
+                    Ok(
+                        // Safety: Safe to unwrap here because we
+                        //         are checking for the range.
+                        i64::try_from(-Into::<i128>::into(*i)).unwrap(),
+                    )
+                }
+                TupleValue::NegInt7(ref i) if (281474976710656..=72057594037927935).contains(i) => {
+                    Ok(
+                        // Safety: Safe to unwrap here because we
+                        //         are checking for the range.
+                        i64::try_from(-Into::<i128>::into(*i)).unwrap(),
+                    )
+                }
+                TupleValue::NegInt6(ref i) if (1099511627776..=281474976710655).contains(i) => {
+                    Ok(
+                        // Safety: Safe to unwrap here because we
+                        //         are checking for the range.
+                        i64::try_from(-Into::<i128>::into(*i)).unwrap(),
+                    )
+                }
+                TupleValue::NegInt5(ref i) if (4294967296..=1099511627775).contains(i) => {
+                    Ok(
+                        // Safety: Safe to unwrap here because we
+                        //         are checking for the range.
+                        i64::try_from(-Into::<i128>::into(*i)).unwrap(),
+                    )
+                }
+                TupleValue::NegInt4(ref i) if (2147483649..=4294967295).contains(i) => {
+                    Ok(-Into::<i64>::into(*i))
+                }
+                TupleValue::PosInt4(ref i) if (2147483648..=4294967295).contains(i) => {
+                    Ok((*i).into())
+                }
+                TupleValue::PosInt5(ref i) if (4294967296..=1099511627775).contains(i) => {
+                    Ok(
+                        // Safety: Safe to unwrap here because we
+                        //         are checking for the range.
+                        i64::try_from(*i).unwrap(),
+                    )
+                }
+                TupleValue::PosInt6(ref i) if (1099511627776..=281474976710655).contains(i) => {
+                    Ok(
+                        // Safety: Safe to unwrap here because we
+                        //         are checking for the range.
+                        i64::try_from(*i).unwrap(),
+                    )
+                }
+                TupleValue::PosInt7(ref i) if (281474976710656..=72057594037927935).contains(i) => {
+                    Ok(
+                        // Safety: Safe to unwrap here because we
+                        //         are checking for the range.
+                        i64::try_from(*i).unwrap(),
+                    )
+                }
+                TupleValue::PosInt8(ref i)
+                    if (72057594037927936..=9223372036854775807).contains(i) =>
+                {
+                    Ok(
+                        // Safety: Safe to unwrap here because we
+                        //         are checking for the range.
+                        i64::try_from(*i).unwrap(),
+                    )
+                }
+                _ => Err(()),
+            })
+    }
+}
+
+impl TryFrom<TupleValue> for i8 {
+    type Error = ();
+
+    fn try_from(value: TupleValue) -> Result<i8, ()> {
+        match value {
+            TupleValue::NegInt1(i) if i <= 128 => {
+                Ok(
+                    // Safety: Safe to unwrap here because we are
+                    //         checking for the range.
+                    i8::try_from(-Into::<i16>::into(i)).unwrap(),
+                )
+            }
+            TupleValue::IntZero => Ok(0),
+            TupleValue::PosInt1(i) if i <= 127 => Ok(
+                // Safety: Safe to unwrap here because we are
+                //         checking for the range.
+                i8::try_from(i).unwrap(),
+            ),
+            _ => Err(()),
+        }
+    }
+}
+
+impl TryFrom<TupleValue> for Null {
+    type Error = ();
+
+    fn try_from(value: TupleValue) -> Result<Null, ()> {
+        match value {
+            TupleValue::NullValue => Ok(Null),
+            _ => Err(()),
+        }
+    }
+}
+
+impl TryFrom<TupleValue> for Versionstamp {
+    type Error = ();
+
+    fn try_from(value: TupleValue) -> Result<Versionstamp, ()> {
+        match value {
+            TupleValue::Versionstamp96Bit(vs) => Ok(vs),
+            _ => Err(()),
+        }
+    }
+}
+
+impl TryFrom<TupleValue> for Tuple {
+    type Error = ();
+
+    fn try_from(value: TupleValue) -> Result<Tuple, ()> {
+        match value {
+            TupleValue::NestedTuple(t) => Ok(t),
+            _ => Err(()),
+        }
+    }
 }
 
 pub(crate) fn from_bytes(b: Bytes) -> FdbResult<Tuple> {
