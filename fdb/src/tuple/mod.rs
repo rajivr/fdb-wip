@@ -8,6 +8,7 @@
 //!
 //! [general Tuple documentation]: https://apple.github.io/foundationdb/data-modeling.html#data-modeling-tuples
 mod element;
+mod null;
 mod versionstamp;
 
 // We do this in order to preserve consistency with Java and Go
@@ -17,5 +18,6 @@ mod tuple;
 
 pub mod key_util;
 
-pub use tuple::Tuple;
+pub use null::Null;
+pub use tuple::{Tuple, TupleElementGet, TupleElementPush};
 pub use versionstamp::Versionstamp;

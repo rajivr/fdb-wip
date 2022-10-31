@@ -179,7 +179,7 @@ impl Versionstamp {
     /// user version.
     pub fn incomplete(user_version: u16) -> Versionstamp {
         let complete = false;
-        let tr_version = Bytes::from_static(&b"\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"[..]);
+        let tr_version = Bytes::from_static(b"\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF");
 
         Versionstamp {
             complete,
@@ -226,18 +226,18 @@ mod tests {
     #[test]
     fn complete() {
         assert!(std::panic::catch_unwind(|| {
-            Versionstamp::complete(Bytes::from_static(&b"invalid"[..]), 0)
+            Versionstamp::complete(Bytes::from_static(b"invalid"), 0)
         })
         .is_err());
 
         assert_eq!(
             Versionstamp::complete(
-                Bytes::from_static(&b"\xAA\xBB\xCC\xDD\xEE\xFF\x00\x01\x02\x03"[..]),
+                Bytes::from_static(b"\xAA\xBB\xCC\xDD\xEE\xFF\x00\x01\x02\x03"),
                 0
             ),
             Versionstamp {
                 complete: true,
-                tr_version: Bytes::from_static(&b"\xAA\xBB\xCC\xDD\xEE\xFF\x00\x01\x02\x03"[..]),
+                tr_version: Bytes::from_static(b"\xAA\xBB\xCC\xDD\xEE\xFF\x00\x01\x02\x03"),
                 user_version: 0
             }
         );
@@ -246,23 +246,23 @@ mod tests {
     #[test]
     fn from_bytes() {
         assert!(std::panic::catch_unwind(|| {
-            Versionstamp::from_bytes(Bytes::from_static(&b"invalid"[..]))
+            Versionstamp::from_bytes(Bytes::from_static(b"invalid"))
         })
         .is_err());
 
         assert_eq!(
             Versionstamp::from_bytes(Bytes::from_static(
-                &b"\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x02\x91"[..]
+                b"\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x02\x91"
             )),
             Versionstamp::incomplete(657)
         );
 
         assert_eq!(
             Versionstamp::from_bytes(Bytes::from_static(
-                &b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x02\x91"[..]
+                b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x02\x91"
             )),
             Versionstamp::complete(
-                Bytes::from_static(&b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"[..]),
+                Bytes::from_static(b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"),
                 657
             )
         );
@@ -274,7 +274,7 @@ mod tests {
             Versionstamp::incomplete(657),
             Versionstamp {
                 complete: false,
-                tr_version: Bytes::from_static(&b"\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"[..]),
+                tr_version: Bytes::from_static(b"\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"),
                 user_version: 657
             }
         );
@@ -284,15 +284,15 @@ mod tests {
     fn get_bytes() {
         assert_eq!(
             (Versionstamp::complete(
-                Bytes::from_static(&b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"[..]),
+                Bytes::from_static(b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"),
                 657
             ))
             .get_bytes(),
-            Bytes::from_static(&b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x02\x91"[..])
+            Bytes::from_static(b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x02\x91")
         );
         assert_eq!(
             (Versionstamp::incomplete(657)).get_bytes(),
-            Bytes::from_static(&b"\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x02\x91"[..])
+            Bytes::from_static(b"\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x02\x91")
         );
     }
 
@@ -300,16 +300,16 @@ mod tests {
     fn get_transaction_version() {
         assert_eq!(
             (Versionstamp::complete(
-                Bytes::from_static(&b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"[..]),
+                Bytes::from_static(b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"),
                 657
             ))
             .get_transaction_version(),
-            Bytes::from_static(&b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"[..])
+            Bytes::from_static(b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A")
         );
 
         assert_eq!(
             (Versionstamp::incomplete(657)).get_transaction_version(),
-            Bytes::from_static(&b"\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"[..])
+            Bytes::from_static(b"\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF")
         );
     }
 
@@ -317,7 +317,7 @@ mod tests {
     fn get_user_version() {
         assert_eq!(
             (Versionstamp::complete(
-                Bytes::from_static(&b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"[..]),
+                Bytes::from_static(b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"),
                 657
             ))
             .get_user_version(),
@@ -330,7 +330,7 @@ mod tests {
     #[test]
     fn is_complete() {
         assert!((Versionstamp::complete(
-            Bytes::from_static(&b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"[..]),
+            Bytes::from_static(b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"),
             657
         ))
         .is_complete());

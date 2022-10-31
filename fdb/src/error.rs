@@ -35,14 +35,26 @@ pub const TUPLE_GET: i32 = 110;
 ///
 /// [`Tuple`]: crate::tuple::Tuple
 /// [`Bytes`]: bytes::Bytes
-pub const TUPLE_FROM_BYTES: i32 = 111;
+pub const TUPLE_TRY_FROM_BYTES: i32 = 111;
+
+/// Error occurred extracting a [`Tuple`] value from [`Key`].
+///
+/// [`Tuple`]: crate::tuple::Tuple
+/// [`Key`]: crate::Key
+pub const TUPLE_TRY_FROM_KEY: i32 = 112;
+
+/// Error occurred extracting a [`Tuple`] value from [`Value`].
+///
+/// [`Tuple`]: crate::tuple::Tuple
+/// [`Value`]: crate::Value
+pub const TUPLE_TRY_FROM_VALUE: i32 = 113;
 
 /// Error occured when trying to pack [`Tuple`] containing an
 /// incomplete [`Versionstamp`]. No incomplete [`Versionstamp`] found.
 ///
 /// [`Tuple`]:  crate::tuple::Tuple
 /// [`Versionstamp`]: crate::tuple::Versionstamp
-pub const TUPLE_PACK_WITH_VERSIONSTAMP_NOT_FOUND: i32 = 112;
+pub const TUPLE_PACK_WITH_VERSIONSTAMP_NOT_FOUND: i32 = 114;
 
 /// Error occured when trying to pack [`Tuple`] containing an
 /// incomplete [`Versionstamp`]. Multiple incomplete [`Versionstamp`]
@@ -50,13 +62,13 @@ pub const TUPLE_PACK_WITH_VERSIONSTAMP_NOT_FOUND: i32 = 112;
 ///
 /// [`Tuple`]:  crate::tuple::Tuple
 /// [`Versionstamp`]: crate::tuple::Versionstamp
-pub const TUPLE_PACK_WITH_VERSIONSTAMP_MULTIPLE_FOUND: i32 = 113;
+pub const TUPLE_PACK_WITH_VERSIONSTAMP_MULTIPLE_FOUND: i32 = 115;
 
 /// Error occurred when calling [`strinc`], as the `prefix` supplied
 /// is either empty or contains only `0xFF`.
 ///
 /// [`strinc`]: crate::tuple::key_util::strinc
-pub const TUPLE_KEY_UTIL_STRINC_ERROR: i32 = 114;
+pub const TUPLE_KEY_UTIL_STRINC_ERROR: i32 = 116;
 
 /// Error occured when trying to pack [`Subspace`] containing an
 /// incomplete [`Versionstamp`]. Prefix contains an incomplete

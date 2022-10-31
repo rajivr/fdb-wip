@@ -15,6 +15,8 @@
 
 use bytes::{BufMut, Bytes, BytesMut};
 
+use std::convert::TryFrom;
+
 use crate::error::{
     FdbError, FdbResult, SUBSPACE_PACK_WITH_VERSIONSTAMP_PREFIX_INCOMPLETE,
     SUBSPACE_UNPACK_KEY_MISMATCH,
@@ -120,7 +122,7 @@ impl Subspace {
         if !self.contains(key) {
             Err(FdbError::new(SUBSPACE_UNPACK_KEY_MISMATCH))
         } else {
-            Tuple::from_bytes(key.slice(self.raw_prefix.len()..))
+            Tuple::try_from(key.slice(self.raw_prefix.len()..))
         }
     }
 }
@@ -134,30 +136,30 @@ mod tests {
         TUPLE_PACK_WITH_VERSIONSTAMP_MULTIPLE_FOUND,
     };
     use crate::range::Range;
-    use crate::tuple::{Tuple, Versionstamp};
+    use crate::tuple::{Null, Tuple, Versionstamp};
 
     use super::Subspace;
 
     #[test]
     fn new() {
-        let s = Subspace::new(Bytes::from_static(&b"prefix"[..]));
+        let s = Subspace::new(Bytes::from_static(b"prefix"));
         assert!(
             !s.raw_prefix_has_incomplete_versionstamp
-                && s.raw_prefix == Bytes::from_static(&b"prefix"[..])
+                && s.raw_prefix == Bytes::from_static(b"prefix")
         );
     }
 
     #[test]
     fn subspace() {
         let mut t = Tuple::new();
-        t.add_string("hello".to_string());
+        t.push_back::<String>("hello".to_string());
 
         let s = Subspace::new(Bytes::new()).subspace(&t);
 
         assert!(!s.raw_prefix_has_incomplete_versionstamp && s.raw_prefix == t.pack());
 
         let mut t = Tuple::new();
-        t.add_versionstamp(Versionstamp::incomplete(0));
+        t.push_back::<Versionstamp>(Versionstamp::incomplete(0));
 
         let s = Subspace::new(Bytes::new()).subspace(&t);
 
@@ -166,21 +168,17 @@ mod tests {
 
     #[test]
     fn contains() {
-        let s = Subspace::new(Bytes::from_static(&b"prefix"[..]));
+        let s = Subspace::new(Bytes::from_static(b"prefix"));
 
         let mut t = Tuple::new();
 
         // length mismatch
-        assert!(!s.contains(
-            &Subspace::new(Bytes::from_static(&b"p"[..]))
-                .subspace(&t)
-                .pack()
-        ));
+        assert!(!s.contains(&Subspace::new(Bytes::from_static(b"p")).subspace(&t).pack()));
 
-        t.add_string("hello".to_string());
+        t.push_back::<String>("hello".to_string());
 
         assert!(!s.contains(
-            &Subspace::new(Bytes::from_static(&b"wrong_prefix"[..]))
+            &Subspace::new(Bytes::from_static(b"wrong_prefix"))
                 .subspace(&t)
                 .pack()
         ));
@@ -188,13 +186,13 @@ mod tests {
         // While this returns `true`, doing something like this will
         // cause `unpack()` to fail.
         assert!(s.contains(
-            &Subspace::new(Bytes::from_static(&b"prefix_plus_garbage"[..]))
+            &Subspace::new(Bytes::from_static(b"prefix_plus_garbage"))
                 .subspace(&t)
                 .pack()
         ));
 
         assert!(s.contains(
-            &Subspace::new(Bytes::from_static(&b"prefix"[..]))
+            &Subspace::new(Bytes::from_static(b"prefix"))
                 .subspace(&t)
                 .pack()
         ));
@@ -203,9 +201,9 @@ mod tests {
     #[test]
     fn pack() {
         let mut t = Tuple::new();
-        t.add_string("hello".to_string());
+        t.push_back::<String>("hello".to_string());
 
-        let s = Subspace::new(Bytes::from_static(&b"prefix"[..]));
+        let s = Subspace::new(Bytes::from_static(b"prefix"));
 
         assert_eq!(s.subspace(&t).pack(), {
             let mut b = BytesMut::new();
@@ -219,14 +217,14 @@ mod tests {
     #[test]
     fn pack_with_versionstamp() {
         let mut t = Tuple::new();
-        t.add_versionstamp(Versionstamp::incomplete(0));
+        t.push_back::<Versionstamp>(Versionstamp::incomplete(0));
 
         let s = Subspace::new(Bytes::new()).subspace(&t);
 
         assert_eq!(
             s.pack_with_versionstamp(&{
                 let mut t1 = Tuple::new();
-                t1.add_string("hello".to_string());
+                t1.push_back::<String>("hello".to_string());
                 t1
             }),
             Err(FdbError::new(
@@ -235,23 +233,23 @@ mod tests {
         );
 
         let mut t = Tuple::new();
-        t.add_string("foo".to_string());
-        t.add_versionstamp(Versionstamp::incomplete(0));
+        t.push_back::<String>("foo".to_string());
+        t.push_back::<Versionstamp>(Versionstamp::incomplete(0));
 
-        let s = Subspace::new(Bytes::from_static(&b"prefix"[..]));
+        let s = Subspace::new(Bytes::from_static(b"prefix"));
 
         assert_eq!(
             s.pack_with_versionstamp(&t),
-            t.pack_with_versionstamp(Bytes::from_static(&b"prefix"[..]))
+            t.pack_with_versionstamp(Bytes::from_static(b"prefix"))
         );
 
         let mut t = Tuple::new();
-        t.add_null();
-        t.add_versionstamp(Versionstamp::incomplete(0));
-        t.add_tuple({
+        t.push_back::<Null>(Null);
+        t.push_back::<Versionstamp>(Versionstamp::incomplete(0));
+        t.push_back::<Tuple>({
             let mut t1 = Tuple::new();
-            t1.add_string("foo".to_string());
-            t1.add_versionstamp(Versionstamp::incomplete(1));
+            t1.push_back::<String>("foo".to_string());
+            t1.push_back::<Versionstamp>(Versionstamp::incomplete(1));
             t1
         });
 
@@ -265,42 +263,42 @@ mod tests {
     fn range() {
         let s = Subspace::new(Bytes::new()).subspace(&{
             let mut t = Tuple::new();
-            t.add_versionstamp(Versionstamp::incomplete(0));
+            t.push_back::<Versionstamp>(Versionstamp::incomplete(0));
             t
         });
 
         assert!(std::panic::catch_unwind(|| {
             s.range(&{
                 let mut t = Tuple::new();
-                t.add_string("should_panic".to_string());
+                t.push_back::<String>("should_panic".to_string());
                 t
             });
         })
         .is_err());
 
-        let s = Subspace::new(Bytes::from_static(&b"prefix"[..]));
+        let s = Subspace::new(Bytes::from_static(b"prefix"));
 
         assert_eq!(
             s.range(&{
                 let mut t = Tuple::new();
-                t.add_bytes(Bytes::from_static(&b"foo"[..]));
+                t.push_back::<Bytes>(Bytes::from_static(b"foo"));
                 t
             }),
             Range::new(
-                Bytes::from_static(&b"prefix\x01foo\x00\x00"[..]),
-                Bytes::from_static(&b"prefix\x01foo\x00\xFF"[..])
+                Bytes::from_static(b"prefix\x01foo\x00\x00"),
+                Bytes::from_static(b"prefix\x01foo\x00\xFF")
             )
         );
     }
 
     #[test]
     fn unpack() {
-        let s = Subspace::new(Bytes::from_static(&b"prefix"[..]));
+        let s = Subspace::new(Bytes::from_static(b"prefix"));
 
-        let key = Subspace::new(Bytes::from_static(&b"wrong_prefix"[..]))
+        let key = Subspace::new(Bytes::from_static(b"wrong_prefix"))
             .subspace(&{
                 let mut t = Tuple::new();
-                t.add_string("hello".to_string());
+                t.push_back::<String>("hello".to_string());
                 t
             })
             .pack();
@@ -310,10 +308,10 @@ mod tests {
             Err(FdbError::new(SUBSPACE_UNPACK_KEY_MISMATCH))
         );
 
-        let key = Subspace::new(Bytes::from_static(&b"prefix"[..]))
+        let key = Subspace::new(Bytes::from_static(b"prefix"))
             .subspace(&{
                 let mut t = Tuple::new();
-                t.add_string("hello".to_string());
+                t.push_back::<String>("hello".to_string());
                 t
             })
             .pack();
@@ -322,7 +320,7 @@ mod tests {
             s.unpack(&key),
             Ok({
                 let mut t = Tuple::new();
-                t.add_string("hello".to_string());
+                t.push_back::<String>("hello".to_string());
                 t
             })
         );

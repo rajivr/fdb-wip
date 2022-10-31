@@ -1,5 +1,6 @@
 use bytes::Bytes;
 
+use fdb::error::{FdbError, TUPLE_GET};
 use fdb::range::RangeOptions;
 use fdb::subspace::Subspace;
 use fdb::transaction::{MutationType, Transaction};
@@ -32,8 +33,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             .run(|tr| async move {
                 let t = {
                     let mut tup = Tuple::new();
-                    tup.add_string(String::from("prefix"));
-                    tup.add_versionstamp(Versionstamp::incomplete(0));
+                    tup.push_back::<String>(String::from("prefix"));
+                    tup.push_back::<Versionstamp>(Versionstamp::incomplete(0));
                     tup
                 };
 
@@ -55,7 +56,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             .run(|tr| async move {
                 let subspace = Subspace::new(Bytes::new()).subspace(&{
                     let mut tup = Tuple::new();
-                    tup.add_string("prefix".to_string());
+                    tup.push_back::<String>("prefix".to_string());
                     tup
                 });
 
@@ -71,7 +72,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 Ok(subspace
                     .unpack(&key.into())?
-                    .get_versionstamp_ref(0)?
+                    .get::<&Versionstamp>(0)
+                    .ok_or(FdbError::new(TUPLE_GET))?
                     .clone())
             })
             .await?;

@@ -10,6 +10,7 @@ use fdb::{Key, Mapper, Value};
 use tokio::runtime::Runtime;
 use tokio_stream::StreamExt;
 
+use std::convert::TryFrom;
 use std::env;
 use std::error::Error;
 
@@ -62,16 +63,16 @@ fn mapper() -> Mapper {
         let mut tup = Tuple::new();
 
         // PREFIX
-        tup.add_string((mapper_tup.0).to_string());
+        tup.push_back::<String>((mapper_tup.0).to_string());
 
         // RECORD
-        tup.add_string((mapper_tup.1).to_string());
+        tup.push_back::<String>((mapper_tup.1).to_string());
 
         // "{K[3]}"
-        tup.add_string((mapper_tup.2).to_string());
+        tup.push_back::<String>((mapper_tup.2).to_string());
 
         // "{...}"
-        tup.add_string((mapper_tup.3).to_string());
+        tup.push_back::<String>((mapper_tup.3).to_string());
 
         tup
     };
@@ -94,14 +95,14 @@ fn index_entry_key(i: u32) -> Key {
         let mut tup = Tuple::new();
 
         // PREFIX
-        tup.add_string((index_tup.0).to_string());
+        tup.push_back::<String>((index_tup.0).to_string());
 
         // INDEX
-        tup.add_string((index_tup.1).to_string());
+        tup.push_back::<String>((index_tup.1).to_string());
 
-        tup.add_string(index_tup.2);
+        tup.push_back::<String>(index_tup.2);
 
-        tup.add_string(index_tup.3);
+        tup.push_back::<String>(index_tup.3);
 
         tup
     };
@@ -125,12 +126,12 @@ fn record_key_prefix(i: u32) -> Tuple {
         let mut tup = Tuple::new();
 
         // PREFIX
-        tup.add_string((rec_key_prefix_tup.0).to_string());
+        tup.push_back::<String>((rec_key_prefix_tup.0).to_string());
 
         // RECORD
-        tup.add_string((rec_key_prefix_tup.1).to_string());
+        tup.push_back::<String>((rec_key_prefix_tup.1).to_string());
 
-        tup.add_string(rec_key_prefix_tup.2);
+        tup.push_back::<String>(rec_key_prefix_tup.2);
 
         tup
     }
@@ -149,14 +150,14 @@ fn record_key(i: u32, split: u32) -> Key {
         let mut tup = Tuple::new();
 
         // PREFIX
-        tup.add_string((rec_key_tup.0).to_string());
+        tup.push_back::<String>((rec_key_tup.0).to_string());
 
         // RECORD
-        tup.add_string((rec_key_tup.1).to_string());
+        tup.push_back::<String>((rec_key_tup.1).to_string());
 
-        tup.add_string(rec_key_tup.2);
+        tup.push_back::<String>(rec_key_tup.2);
 
-        tup.add_i64(rec_key_tup.3.into());
+        tup.push_back::<i64>(rec_key_tup.3.into());
 
         tup
     };
@@ -175,9 +176,9 @@ fn record_value(i: u32, split: u32) -> Value {
     let rec_value = {
         let mut tup = Tuple::new();
 
-        tup.add_string(rec_value_tup.0);
+        tup.push_back::<String>(rec_value_tup.0);
 
-        tup.add_i64(rec_value_tup.1.into());
+        tup.push_back::<i64>(rec_value_tup.1.into());
 
         tup
     };
@@ -243,14 +244,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                     println!("-----");
 
                     let (kv_key, kv_value) = kv.into_parts();
-                    println!("kv_key: {:?}", Tuple::from_bytes(kv_key)?);
-                    println!("kv_value: {:?}", Tuple::from_bytes(kv_value)?);
+                    println!("kv_key: {:?}", Tuple::try_from(kv_key)?);
+                    println!("kv_value: {:?}", Tuple::try_from(kv_value)?);
                     println!();
 
                     let (mapped_range_begin_key, mapped_range_end_key) = mapped_range.into_parts();
                     println!(
                         "mapped_range_begin_key: {:?}",
-                        Tuple::from_bytes(mapped_range_begin_key)?
+                        Tuple::try_from(mapped_range_begin_key)?
                     );
                     // Not a tuple
                     println!("mapped_range_end_key: {:?}", mapped_range_end_key);
@@ -258,8 +259,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                     for mapped_kv in mapped_kvs {
                         let (mapped_kv_key, mapped_kv_value) = mapped_kv.into_parts();
-                        println!("mapped_kv_key: {:?}", Tuple::from_bytes(mapped_kv_key)?);
-                        println!("mapped_kv_value: {:?}", Tuple::from_bytes(mapped_kv_value)?);
+                        println!("mapped_kv_key: {:?}", Tuple::try_from(mapped_kv_key)?);
+                        println!("mapped_kv_value: {:?}", Tuple::try_from(mapped_kv_value)?);
                     }
                     println!("-----");
                 }

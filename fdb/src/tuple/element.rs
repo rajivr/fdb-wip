@@ -2,7 +2,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 use num_bigint::BigInt;
 use uuid::Uuid;
 
-use crate::error::{FdbError, FdbResult, TUPLE_FROM_BYTES};
+use crate::error::{FdbError, FdbResult, TUPLE_TRY_FROM_BYTES};
 use crate::tuple::{Tuple, Versionstamp};
 
 // The specifications for FDB Tuple layer typecodes is here.
@@ -44,7 +44,7 @@ pub(crate) enum TupleValue {
 pub(crate) fn from_bytes(b: Bytes) -> FdbResult<Tuple> {
     parser::tuple(b.as_ref())
         .map(|(_, t)| t)
-        .map_err(|_| FdbError::new(TUPLE_FROM_BYTES))
+        .map_err(|_| FdbError::new(TUPLE_TRY_FROM_BYTES))
 }
 
 pub(crate) fn to_bytes(t: Tuple) -> Bytes {
@@ -461,7 +461,7 @@ pub(self) mod versionstamp {
             FdbError, TUPLE_PACK_WITH_VERSIONSTAMP_MULTIPLE_FOUND,
             TUPLE_PACK_WITH_VERSIONSTAMP_NOT_FOUND,
         };
-        use crate::tuple::{Tuple, Versionstamp};
+        use crate::tuple::{Null, Tuple, Versionstamp};
 
         use super::{
             query_for_incomplete_versionstamp, query_for_incomplete_versionstamp_nested_tuple,
@@ -473,9 +473,9 @@ pub(self) mod versionstamp {
             assert_eq!(
                 query_for_incomplete_versionstamp({
                     let mut t = Tuple::new();
-                    t.add_null();
-                    t.add_versionstamp(Versionstamp::incomplete(0));
-                    t.add_string("foo".to_string());
+                    t.push_back::<Null>(Null);
+                    t.push_back::<Versionstamp>(Versionstamp::incomplete(0));
+                    t.push_back::<String>("foo".to_string());
                     t
                 }),
                 Ok(2)
@@ -483,8 +483,8 @@ pub(self) mod versionstamp {
             assert_eq!(
                 query_for_incomplete_versionstamp({
                     let mut t = Tuple::new();
-                    t.add_null();
-                    t.add_string("foo".to_string());
+                    t.push_back::<Null>(Null);
+                    t.push_back::<String>("foo".to_string());
                     t
                 }),
                 Err(FdbError::new(TUPLE_PACK_WITH_VERSIONSTAMP_NOT_FOUND))
@@ -492,19 +492,19 @@ pub(self) mod versionstamp {
             assert_eq!(
                 query_for_incomplete_versionstamp({
                     let mut t = Tuple::new();
-                    t.add_null();
-                    t.add_tuple({
+                    t.push_back::<Null>(Null);
+                    t.push_back::<Tuple>({
                         let mut t1 = Tuple::new();
-                        t1.add_versionstamp(Versionstamp::incomplete(1));
+                        t1.push_back::<Versionstamp>(Versionstamp::incomplete(1));
                         t1
                     });
-                    t.add_string("foo".to_string());
-                    t.add_tuple({
+                    t.push_back::<String>("foo".to_string());
+                    t.push_back::<Tuple>({
                         let mut t2 = Tuple::new();
-                        t2.add_versionstamp(Versionstamp::incomplete(1));
+                        t2.push_back::<Versionstamp>(Versionstamp::incomplete(1));
                         t2
                     });
-                    t.add_string("bar".to_string());
+                    t.push_back::<String>("bar".to_string());
                     t
                 }),
                 Err(FdbError::new(TUPLE_PACK_WITH_VERSIONSTAMP_MULTIPLE_FOUND))
@@ -516,9 +516,9 @@ pub(self) mod versionstamp {
             assert_eq!(
                 query_for_incomplete_versionstamp_nested_tuple({
                     let mut t = Tuple::new();
-                    t.add_null();
-                    t.add_versionstamp(Versionstamp::incomplete(0));
-                    t.add_string("foo".to_string());
+                    t.push_back::<Null>(Null);
+                    t.push_back::<Versionstamp>(Versionstamp::incomplete(0));
+                    t.push_back::<String>("foo".to_string());
                     t
                 }),
                 QueryForIncompleteVersionstamp::Found(3)
@@ -526,8 +526,8 @@ pub(self) mod versionstamp {
             assert_eq!(
                 query_for_incomplete_versionstamp_nested_tuple({
                     let mut t = Tuple::new();
-                    t.add_null();
-                    t.add_string("foo".to_string());
+                    t.push_back::<Null>(Null);
+                    t.push_back::<String>("foo".to_string());
                     t
                 }),
                 QueryForIncompleteVersionstamp::NotFound(7)
@@ -535,19 +535,19 @@ pub(self) mod versionstamp {
             assert_eq!(
                 query_for_incomplete_versionstamp_nested_tuple({
                     let mut t = Tuple::new();
-                    t.add_null();
-                    t.add_tuple({
+                    t.push_back::<Null>(Null);
+                    t.push_back::<Tuple>({
                         let mut t1 = Tuple::new();
-                        t1.add_versionstamp(Versionstamp::incomplete(1));
+                        t1.push_back::<Versionstamp>(Versionstamp::incomplete(1));
                         t1
                     });
-                    t.add_string("foo".to_string());
-                    t.add_tuple({
+                    t.push_back::<String>("foo".to_string());
+                    t.push_back::<Tuple>({
                         let mut t2 = Tuple::new();
-                        t2.add_versionstamp(Versionstamp::incomplete(1));
+                        t2.push_back::<Versionstamp>(Versionstamp::incomplete(1));
                         t2
                     });
-                    t.add_string("bar".to_string());
+                    t.push_back::<String>("bar".to_string());
                     t
                 }),
                 QueryForIncompleteVersionstamp::MultipleFound
@@ -569,11 +569,11 @@ pub(self) mod serializer {
     use super::{utils::neg_u8_slice_into_vec, TupleValue};
 
     pub(crate) fn null_value() -> Bytes {
-        Bytes::from_static(&b"\x00"[..])
+        Bytes::from_static(b"\x00")
     }
 
     pub(crate) fn nested_tuple_null_value() -> Bytes {
-        Bytes::from_static(&b"\x00\xFF"[..])
+        Bytes::from_static(b"\x00\xFF")
     }
 
     pub(crate) fn byte_string(b: Bytes) -> Bytes {
@@ -670,7 +670,7 @@ pub(self) mod serializer {
 
         // Maximum length of val should be 255. We do not allow
         // encoding of [`BigInt`] greator than 255 using
-        // `add_bigint`.
+        // `push_back::<BigInt>`.
         let len = (u8::try_from(val.len()).unwrap()) ^ 0xFFu8;
 
         let mut res = BytesMut::new();
@@ -780,7 +780,7 @@ pub(self) mod serializer {
     }
 
     pub(crate) fn int_zero() -> Bytes {
-        Bytes::from_static(&b"\x14"[..])
+        Bytes::from_static(b"\x14")
     }
 
     pub(crate) fn pos_int_1(u: u8) -> Bytes {
@@ -878,7 +878,7 @@ pub(self) mod serializer {
 
         // Maximum length of val should be 255. We do not allow
         // encoding of [`BigInt`] greator than 255 using
-        // `add_bigint`.
+        // `push_back::<BigInt>`.
         let len = u8::try_from(val.len()).unwrap();
 
         let mut res = BytesMut::new();
@@ -930,11 +930,11 @@ pub(self) mod serializer {
     }
 
     pub(crate) fn false_value() -> Bytes {
-        Bytes::from_static(&b"\x26"[..])
+        Bytes::from_static(b"\x26")
     }
 
     pub(crate) fn true_value() -> Bytes {
-        Bytes::from_static(&b"\x27"[..])
+        Bytes::from_static(b"\x27")
     }
 
     pub(crate) fn rfc_4122_uuid(u: Uuid) -> Bytes {
@@ -975,36 +975,33 @@ pub(self) mod serializer {
             versionstamp_96_bit, TupleValue,
         };
 
+        // *Note:* We prefix with `test_` here because we do not want
+        //         to conflict with similarly named function above.
+
         #[test]
         fn test_null_value() {
-            assert_eq!(null_value(), Bytes::from_static(&b"\x00"[..]));
+            assert_eq!(null_value(), Bytes::from_static(b"\x00"));
         }
 
         #[test]
         fn test_nested_tuple_null_value() {
-            assert_eq!(
-                nested_tuple_null_value(),
-                Bytes::from_static(&b"\x00\xFF"[..])
-            );
+            assert_eq!(nested_tuple_null_value(), Bytes::from_static(b"\x00\xFF"));
         }
 
         #[test]
         fn test_byte_string() {
             assert_eq!(
-                byte_string(Bytes::from_static(&b"foo\x00bar"[..])),
-                Bytes::from_static(&b"\x01foo\x00\xFFbar\x00"[..]),
+                byte_string(Bytes::from_static(b"foo\x00bar")),
+                Bytes::from_static(b"\x01foo\x00\xFFbar\x00"),
+            );
+            assert_eq!(byte_string(Bytes::new()), Bytes::from_static(b"\x01\x00"),);
+            assert_eq!(
+                byte_string(Bytes::from_static(b"\x01\x02\x03")),
+                Bytes::from_static(b"\x01\x01\x02\x03\x00"),
             );
             assert_eq!(
-                byte_string(Bytes::new()),
-                Bytes::from_static(&b"\x01\x00"[..]),
-            );
-            assert_eq!(
-                byte_string(Bytes::from_static(&b"\x01\x02\x03"[..])),
-                Bytes::from_static(&b"\x01\x01\x02\x03\x00"[..]),
-            );
-            assert_eq!(
-                byte_string(Bytes::from_static(&b"\x00\x00\x00\x04"[..])),
-                Bytes::from_static(&b"\x01\x00\xFF\x00\xFF\x00\xFF\x04\x00"[..]),
+                byte_string(Bytes::from_static(b"\x00\x00\x00\x04")),
+                Bytes::from_static(b"\x01\x00\xFF\x00\xFF\x00\xFF\x04\x00"),
             );
         }
 
@@ -1012,25 +1009,23 @@ pub(self) mod serializer {
         fn test_unicode_string() {
             assert_eq!(
                 unicode_string("F\u{00d4}O\u{0000}bar".to_string()),
-                Bytes::from_static(&b"\x02F\xC3\x94O\x00\xffbar\x00"[..]),
+                Bytes::from_static(b"\x02F\xC3\x94O\x00\xffbar\x00"),
             );
             assert_eq!(
                 unicode_string("".to_string()),
-                Bytes::from_static(&b"\x02\x00"[..]),
+                Bytes::from_static(b"\x02\x00"),
             );
             assert_eq!(
                 unicode_string("hello".to_string()),
-                Bytes::from_static(&b"\x02hello\x00"[..]),
+                Bytes::from_static(b"\x02hello\x00"),
             );
             assert_eq!(
                 unicode_string("中文".to_string()),
-                Bytes::from_static(&b"\x02\xE4\xB8\xAD\xE6\x96\x87\x00"[..]),
+                Bytes::from_static(b"\x02\xE4\xB8\xAD\xE6\x96\x87\x00"),
             );
             assert_eq!(
                 unicode_string("μάθημα".to_string()),
-                Bytes::from_static(
-                    &b"\x02\xCE\xBC\xCE\xAC\xCE\xB8\xCE\xB7\xCE\xBC\xCE\xB1\x00"[..]
-                ),
+                Bytes::from_static(b"\x02\xCE\xBC\xCE\xAC\xCE\xB8\xCE\xB7\xCE\xBC\xCE\xB1\x00"),
             );
         }
 
@@ -1038,21 +1033,21 @@ pub(self) mod serializer {
         fn test_nested_tuple() {
             assert_eq!(
                 nested_tuple(Tuple::from_elements(vec![TupleValue::NullValue])),
-                Bytes::from_static(&b"\x05\x00\xFF\x00"[..])
+                Bytes::from_static(b"\x05\x00\xFF\x00")
             );
             assert_eq!(
                 nested_tuple(Tuple::from_elements(vec![
                     TupleValue::NullValue,
                     TupleValue::UnicodeString("hello".to_string()),
                 ])),
-                Bytes::from_static(&b"\x05\x00\xFF\x02hello\x00\x00"[..])
+                Bytes::from_static(b"\x05\x00\xFF\x02hello\x00\x00")
             );
             assert_eq!(
                 nested_tuple(Tuple::from_elements(vec![
                     TupleValue::NullValue,
                     TupleValue::UnicodeString("hell\u{0}".to_string()),
                 ])),
-                Bytes::from_static(&b"\x05\x00\xFF\x02hell\x00\xFF\x00\x00"[..])
+                Bytes::from_static(b"\x05\x00\xFF\x02hell\x00\xFF\x00\x00")
             );
         }
 
@@ -1062,7 +1057,7 @@ pub(self) mod serializer {
                 negative_arbitrary_precision_integer(
                     BigInt::parse_bytes(b"18446744073709551616", 10).unwrap()
                 ),
-                Bytes::from_static(&b"\x0B\xF6\xFE\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"[..]),
+                Bytes::from_static(b"\x0B\xF6\xFE\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"),
             );
         }
 
@@ -1070,19 +1065,19 @@ pub(self) mod serializer {
         fn test_neg_int_8() {
             assert_eq!(
                 neg_int_8(18446744073709551615),
-                Bytes::from_static(&b"\x0C\x00\x00\x00\x00\x00\x00\x00\x00"[..]),
+                Bytes::from_static(b"\x0C\x00\x00\x00\x00\x00\x00\x00\x00"),
             );
             assert_eq!(
                 neg_int_8(72057594037927936),
-                Bytes::from_static(&b"\x0C\xFE\xFF\xFF\xFF\xFF\xFF\xFF\xFF"[..]),
+                Bytes::from_static(b"\x0C\xFE\xFF\xFF\xFF\xFF\xFF\xFF\xFF"),
             );
             assert_eq!(
                 neg_int_8(9223372036854775809),
-                Bytes::from_static(&b"\x0C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFE"[..]),
+                Bytes::from_static(b"\x0C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFE"),
             );
             assert_eq!(
                 neg_int_8(9223372036854775808),
-                Bytes::from_static(&b"\x0C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF"[..]),
+                Bytes::from_static(b"\x0C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF"),
             );
         }
 
@@ -1090,11 +1085,11 @@ pub(self) mod serializer {
         fn test_neg_int_7() {
             assert_eq!(
                 neg_int_7(72057594037927935),
-                Bytes::from_static(&b"\x0D\x00\x00\x00\x00\x00\x00\x00"[..]),
+                Bytes::from_static(b"\x0D\x00\x00\x00\x00\x00\x00\x00"),
             );
             assert_eq!(
                 neg_int_7(281474976710656),
-                Bytes::from_static(&b"\x0D\xFE\xFF\xFF\xFF\xFF\xFF\xFF"[..]),
+                Bytes::from_static(b"\x0D\xFE\xFF\xFF\xFF\xFF\xFF\xFF"),
             );
         }
 
@@ -1102,11 +1097,11 @@ pub(self) mod serializer {
         fn test_neg_int_6() {
             assert_eq!(
                 neg_int_6(281474976710655),
-                Bytes::from_static(&b"\x0E\x00\x00\x00\x00\x00\x00"[..]),
+                Bytes::from_static(b"\x0E\x00\x00\x00\x00\x00\x00"),
             );
             assert_eq!(
                 neg_int_6(1099511627776),
-                Bytes::from_static(&b"\x0E\xFE\xFF\xFF\xFF\xFF\xFF"[..]),
+                Bytes::from_static(b"\x0E\xFE\xFF\xFF\xFF\xFF\xFF"),
             );
         }
 
@@ -1114,11 +1109,11 @@ pub(self) mod serializer {
         fn test_neg_int_5() {
             assert_eq!(
                 neg_int_5(1099511627775),
-                Bytes::from_static(&b"\x0F\x00\x00\x00\x00\x00"[..]),
+                Bytes::from_static(b"\x0F\x00\x00\x00\x00\x00"),
             );
             assert_eq!(
                 neg_int_5(4294967296),
-                Bytes::from_static(&b"\x0F\xFE\xFF\xFF\xFF\xFF"[..]),
+                Bytes::from_static(b"\x0F\xFE\xFF\xFF\xFF\xFF"),
             );
         }
 
@@ -1126,100 +1121,88 @@ pub(self) mod serializer {
         fn test_neg_int_4() {
             assert_eq!(
                 neg_int_4(4294967295),
-                Bytes::from_static(&b"\x10\x00\x00\x00\x00"[..]),
+                Bytes::from_static(b"\x10\x00\x00\x00\x00"),
             );
             assert_eq!(
                 neg_int_4(16777216),
-                Bytes::from_static(&b"\x10\xFE\xFF\xFF\xFF"[..]),
+                Bytes::from_static(b"\x10\xFE\xFF\xFF\xFF"),
             );
             assert_eq!(
                 neg_int_4(2147483649),
-                Bytes::from_static(&b"\x10\x7F\xFF\xFF\xFE"[..]),
+                Bytes::from_static(b"\x10\x7F\xFF\xFF\xFE"),
             );
             assert_eq!(
                 neg_int_4(2147483648),
-                Bytes::from_static(&b"\x10\x7F\xFF\xFF\xFF"[..]),
+                Bytes::from_static(b"\x10\x7F\xFF\xFF\xFF"),
             );
         }
 
         #[test]
         fn test_neg_int_3() {
-            assert_eq!(
-                neg_int_3(16777215),
-                Bytes::from_static(&b"\x11\x00\x00\x00"[..]),
-            );
-            assert_eq!(
-                neg_int_3(65536),
-                Bytes::from_static(&b"\x11\xFE\xFF\xFF"[..]),
-            );
+            assert_eq!(neg_int_3(16777215), Bytes::from_static(b"\x11\x00\x00\x00"),);
+            assert_eq!(neg_int_3(65536), Bytes::from_static(b"\x11\xFE\xFF\xFF"),);
         }
 
         #[test]
         fn test_neg_int_2() {
-            assert_eq!(neg_int_2(65535), Bytes::from_static(&b"\x12\x00\x00"[..]));
-            assert_eq!(neg_int_2(256), Bytes::from_static(&b"\x12\xFE\xFF"[..]));
-            assert_eq!(neg_int_2(32769), Bytes::from_static(&b"\x12\x7F\xFE"[..]));
-            assert_eq!(neg_int_2(32768), Bytes::from_static(&b"\x12\x7F\xFF"[..]));
+            assert_eq!(neg_int_2(65535), Bytes::from_static(b"\x12\x00\x00"));
+            assert_eq!(neg_int_2(256), Bytes::from_static(b"\x12\xFE\xFF"));
+            assert_eq!(neg_int_2(32769), Bytes::from_static(b"\x12\x7F\xFE"));
+            assert_eq!(neg_int_2(32768), Bytes::from_static(b"\x12\x7F\xFF"));
         }
 
         #[test]
         fn test_neg_int_1() {
-            assert_eq!(neg_int_1(255), Bytes::from_static(&b"\x13\x00"[..]));
-            assert_eq!(neg_int_1(1), Bytes::from_static(&b"\x13\xFE"[..]));
-            assert_eq!(neg_int_1(129), Bytes::from_static(&b"\x13\x7E"[..]));
-            assert_eq!(neg_int_1(128), Bytes::from_static(&b"\x13\x7F"[..]));
+            assert_eq!(neg_int_1(255), Bytes::from_static(b"\x13\x00"));
+            assert_eq!(neg_int_1(1), Bytes::from_static(b"\x13\xFE"));
+            assert_eq!(neg_int_1(129), Bytes::from_static(b"\x13\x7E"));
+            assert_eq!(neg_int_1(128), Bytes::from_static(b"\x13\x7F"));
         }
 
         #[test]
         fn test_int_zero() {
-            assert_eq!(int_zero(), Bytes::from_static(&b"\x14"[..]));
+            assert_eq!(int_zero(), Bytes::from_static(b"\x14"));
         }
 
         #[test]
         fn test_pos_int_1() {
-            assert_eq!(pos_int_1(1), Bytes::from_static(&b"\x15\x01"[..]));
-            assert_eq!(pos_int_1(255), Bytes::from_static(&b"\x15\xFF"[..]));
-            assert_eq!(pos_int_1(127), Bytes::from_static(&b"\x15\x7F"[..]));
-            assert_eq!(pos_int_1(128), Bytes::from_static(&b"\x15\x80"[..]));
+            assert_eq!(pos_int_1(1), Bytes::from_static(b"\x15\x01"));
+            assert_eq!(pos_int_1(255), Bytes::from_static(b"\x15\xFF"));
+            assert_eq!(pos_int_1(127), Bytes::from_static(b"\x15\x7F"));
+            assert_eq!(pos_int_1(128), Bytes::from_static(b"\x15\x80"));
         }
 
         #[test]
         fn test_pos_int_2() {
-            assert_eq!(pos_int_2(256), Bytes::from_static(&b"\x16\x01\x00"[..]));
-            assert_eq!(pos_int_2(65535), Bytes::from_static(&b"\x16\xFF\xFF"[..]));
-            assert_eq!(pos_int_2(32767), Bytes::from_static(&b"\x16\x7F\xFF"[..]));
-            assert_eq!(pos_int_2(32768), Bytes::from_static(&b"\x16\x80\x00"[..]));
+            assert_eq!(pos_int_2(256), Bytes::from_static(b"\x16\x01\x00"));
+            assert_eq!(pos_int_2(65535), Bytes::from_static(b"\x16\xFF\xFF"));
+            assert_eq!(pos_int_2(32767), Bytes::from_static(b"\x16\x7F\xFF"));
+            assert_eq!(pos_int_2(32768), Bytes::from_static(b"\x16\x80\x00"));
         }
 
         #[test]
         fn test_pos_int_3() {
-            assert_eq!(
-                pos_int_3(65536),
-                Bytes::from_static(&b"\x17\x01\x00\x00"[..])
-            );
-            assert_eq!(
-                pos_int_3(16777215),
-                Bytes::from_static(&b"\x17\xFF\xFF\xFF"[..])
-            );
+            assert_eq!(pos_int_3(65536), Bytes::from_static(b"\x17\x01\x00\x00"));
+            assert_eq!(pos_int_3(16777215), Bytes::from_static(b"\x17\xFF\xFF\xFF"));
         }
 
         #[test]
         fn test_pos_int_4() {
             assert_eq!(
                 pos_int_4(16777216),
-                Bytes::from_static(&b"\x18\x01\x00\x00\x00"[..])
+                Bytes::from_static(b"\x18\x01\x00\x00\x00")
             );
             assert_eq!(
                 pos_int_4(4294967295),
-                Bytes::from_static(&b"\x18\xFF\xFF\xFF\xFF"[..])
+                Bytes::from_static(b"\x18\xFF\xFF\xFF\xFF")
             );
             assert_eq!(
                 pos_int_4(2147483647),
-                Bytes::from_static(&b"\x18\x7F\xFF\xFF\xFF"[..])
+                Bytes::from_static(b"\x18\x7F\xFF\xFF\xFF")
             );
             assert_eq!(
                 pos_int_4(2147483648),
-                Bytes::from_static(&b"\x18\x80\x00\x00\x00"[..])
+                Bytes::from_static(b"\x18\x80\x00\x00\x00")
             );
         }
 
@@ -1227,11 +1210,11 @@ pub(self) mod serializer {
         fn test_pos_int_5() {
             assert_eq!(
                 pos_int_5(4294967296),
-                Bytes::from_static(&b"\x19\x01\x00\x00\x00\x00"[..])
+                Bytes::from_static(b"\x19\x01\x00\x00\x00\x00")
             );
             assert_eq!(
                 pos_int_5(1099511627775),
-                Bytes::from_static(&b"\x19\xFF\xFF\xFF\xFF\xFF"[..])
+                Bytes::from_static(b"\x19\xFF\xFF\xFF\xFF\xFF")
             );
         }
 
@@ -1239,11 +1222,11 @@ pub(self) mod serializer {
         fn test_pos_int_6() {
             assert_eq!(
                 pos_int_6(1099511627776),
-                Bytes::from_static(&b"\x1A\x01\x00\x00\x00\x00\x00"[..])
+                Bytes::from_static(b"\x1A\x01\x00\x00\x00\x00\x00")
             );
             assert_eq!(
                 pos_int_6(281474976710655),
-                Bytes::from_static(&b"\x1A\xFF\xFF\xFF\xFF\xFF\xFF"[..])
+                Bytes::from_static(b"\x1A\xFF\xFF\xFF\xFF\xFF\xFF")
             );
         }
 
@@ -1251,11 +1234,11 @@ pub(self) mod serializer {
         fn test_pos_int_7() {
             assert_eq!(
                 pos_int_7(281474976710656),
-                Bytes::from_static(&b"\x1B\x01\x00\x00\x00\x00\x00\x00"[..])
+                Bytes::from_static(b"\x1B\x01\x00\x00\x00\x00\x00\x00")
             );
             assert_eq!(
                 pos_int_7(72057594037927935),
-                Bytes::from_static(&b"\x1B\xFF\xFF\xFF\xFF\xFF\xFF\xFF"[..])
+                Bytes::from_static(b"\x1B\xFF\xFF\xFF\xFF\xFF\xFF\xFF")
             );
         }
 
@@ -1263,19 +1246,19 @@ pub(self) mod serializer {
         fn test_pos_int_8() {
             assert_eq!(
                 pos_int_8(72057594037927936),
-                Bytes::from_static(&b"\x1C\x01\x00\x00\x00\x00\x00\x00\x00"[..])
+                Bytes::from_static(b"\x1C\x01\x00\x00\x00\x00\x00\x00\x00")
             );
             assert_eq!(
                 pos_int_8(18446744073709551615),
-                Bytes::from_static(&b"\x1C\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"[..])
+                Bytes::from_static(b"\x1C\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF")
             );
             assert_eq!(
                 pos_int_8(9223372036854775807),
-                Bytes::from_static(&b"\x1C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF"[..])
+                Bytes::from_static(b"\x1C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF")
             );
             assert_eq!(
                 pos_int_8(9223372036854775808),
-                Bytes::from_static(&b"\x1C\x80\x00\x00\x00\x00\x00\x00\x00"[..])
+                Bytes::from_static(b"\x1C\x80\x00\x00\x00\x00\x00\x00\x00")
             );
         }
 
@@ -1285,7 +1268,7 @@ pub(self) mod serializer {
                 positive_arbitrary_precision_integer(
                     BigInt::parse_bytes(b"18446744073709551616", 10).unwrap()
                 ),
-                Bytes::from_static(&b"\x1D\x09\x01\x00\x00\x00\x00\x00\x00\x00\x00"[..])
+                Bytes::from_static(b"\x1D\x09\x01\x00\x00\x00\x00\x00\x00\x00\x00")
             );
         }
 
@@ -1295,27 +1278,27 @@ pub(self) mod serializer {
         fn test_ieee_binary_floating_point_float() {
             assert_eq!(
                 ieee_binary_floating_point_float(3.14f32),
-                Bytes::from_static(&b"\x20\xC0\x48\xF5\xC3"[..])
+                Bytes::from_static(b"\x20\xC0\x48\xF5\xC3")
             );
             assert_eq!(
                 ieee_binary_floating_point_float(-3.14f32),
-                Bytes::from_static(&b"\x20\x3F\xB7\x0A\x3C"[..])
+                Bytes::from_static(b"\x20\x3F\xB7\x0A\x3C")
             );
             assert_eq!(
                 ieee_binary_floating_point_float(0.0f32),
-                Bytes::from_static(&b"\x20\x80\x00\x00\x00"[..])
+                Bytes::from_static(b"\x20\x80\x00\x00\x00")
             );
             assert_eq!(
                 ieee_binary_floating_point_float(-0.0f32),
-                Bytes::from_static(&b"\x20\x7F\xFF\xFF\xFF"[..])
+                Bytes::from_static(b"\x20\x7F\xFF\xFF\xFF")
             );
             assert_eq!(
                 ieee_binary_floating_point_float(f32::INFINITY),
-                Bytes::from_static(&b"\x20\xFF\x80\x00\x00"[..])
+                Bytes::from_static(b"\x20\xFF\x80\x00\x00")
             );
             assert_eq!(
                 ieee_binary_floating_point_float(f32::NEG_INFINITY),
-                Bytes::from_static(&b"\x20\x00\x7F\xFF\xFF"[..])
+                Bytes::from_static(b"\x20\x00\x7F\xFF\xFF")
             );
         }
 
@@ -1325,38 +1308,38 @@ pub(self) mod serializer {
         fn test_ieee_binary_floating_point_double() {
             assert_eq!(
                 ieee_binary_floating_point_double(3.14f64),
-                Bytes::from_static(&b"\x21\xC0\x09\x1E\xB8\x51\xEB\x85\x1F"[..])
+                Bytes::from_static(b"\x21\xC0\x09\x1E\xB8\x51\xEB\x85\x1F")
             );
             assert_eq!(
                 ieee_binary_floating_point_double(-3.14f64),
-                Bytes::from_static(&b"\x21\x3F\xF6\xE1\x47\xAE\x14\x7A\xE0"[..])
+                Bytes::from_static(b"\x21\x3F\xF6\xE1\x47\xAE\x14\x7A\xE0")
             );
             assert_eq!(
                 ieee_binary_floating_point_double(0.0f64),
-                Bytes::from_static(&b"\x21\x80\x00\x00\x00\x00\x00\x00\x00"[..])
+                Bytes::from_static(b"\x21\x80\x00\x00\x00\x00\x00\x00\x00")
             );
             assert_eq!(
                 ieee_binary_floating_point_double(-0.0f64),
-                Bytes::from_static(&b"\x21\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF"[..])
+                Bytes::from_static(b"\x21\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF")
             );
             assert_eq!(
                 ieee_binary_floating_point_double(f64::INFINITY),
-                Bytes::from_static(&b"\x21\xFF\xF0\x00\x00\x00\x00\x00\x00"[..])
+                Bytes::from_static(b"\x21\xFF\xF0\x00\x00\x00\x00\x00\x00")
             );
             assert_eq!(
                 ieee_binary_floating_point_double(f64::NEG_INFINITY),
-                Bytes::from_static(&b"\x21\x00\x0F\xFF\xFF\xFF\xFF\xFF\xFF"[..])
+                Bytes::from_static(b"\x21\x00\x0F\xFF\xFF\xFF\xFF\xFF\xFF")
             );
         }
 
         #[test]
         fn test_false_value() {
-            assert_eq!(false_value(), Bytes::from_static(&b"\x26"[..]));
+            assert_eq!(false_value(), Bytes::from_static(b"\x26"));
         }
 
         #[test]
         fn test_true_value() {
-            assert_eq!(true_value(), Bytes::from_static(&b"\x27"[..]));
+            assert_eq!(true_value(), Bytes::from_static(b"\x27"));
         }
 
         #[test]
@@ -1364,7 +1347,7 @@ pub(self) mod serializer {
             assert_eq!(
                 rfc_4122_uuid(Uuid::parse_str("ffffffff-ba5e-ba11-0000-00005ca1ab1e").unwrap()),
                 Bytes::from_static(
-                    &b"\x30\xFF\xFF\xFF\xFF\xBA\x5E\xBA\x11\x00\x00\x00\x00\x5C\xA1\xAB\x1E"[..]
+                    b"\x30\xFF\xFF\xFF\xFF\xBA\x5E\xBA\x11\x00\x00\x00\x00\x5C\xA1\xAB\x1E"
                 )
             );
         }
@@ -1373,17 +1356,17 @@ pub(self) mod serializer {
         fn test_versionstamp_96_bit() {
             assert_eq!(
                 versionstamp_96_bit(Versionstamp::complete(
-                    Bytes::from_static(&b"\xAA\xBB\xCC\xDD\xEE\xFF\x00\x01\x02\x03"[..]),
+                    Bytes::from_static(b"\xAA\xBB\xCC\xDD\xEE\xFF\x00\x01\x02\x03"),
                     0
                 )),
-                Bytes::from_static(&b"\x33\xAA\xBB\xCC\xDD\xEE\xFF\x00\x01\x02\x03\x00\x00"[..])
+                Bytes::from_static(b"\x33\xAA\xBB\xCC\xDD\xEE\xFF\x00\x01\x02\x03\x00\x00")
             );
             assert_eq!(
                 versionstamp_96_bit(Versionstamp::complete(
-                    Bytes::from_static(&b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"[..]),
+                    Bytes::from_static(b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"),
                     657
                 )),
-                Bytes::from_static(&b"\x33\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x02\x91"[..])
+                Bytes::from_static(b"\x33\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x02\x91")
             );
         }
     }
@@ -1852,12 +1835,15 @@ pub(self) mod parser {
             positive_arbitrary_precision_integer, rfc_4122_uuid, true_value, tuple, unicode_string,
             versionstamp_96_bit, TupleValue,
         };
-        use crate::tuple::{Tuple, Versionstamp};
+        use crate::tuple::{Null, Tuple, Versionstamp};
         use bytes::Bytes;
         use nom::error::{Error, ErrorKind};
         use num_bigint::BigInt;
         use std::num::NonZeroUsize;
         use uuid::Uuid;
+
+        // *Note:* We prefix with `test_` here because we do not want
+        //         to conflict with similarly named function above.
 
         // For this test, we build the `Tuple` using its public APIs
         // (instead of `Tuple::from_elements`).
@@ -1881,209 +1867,213 @@ pub(self) mod parser {
         #[test]
         fn test_tuple() {
             assert_eq!(
-                tuple(&b"\x00moredata"[..]),
+                tuple(b"\x00moredata"),
                 Err(nom::Err::Error(nom::error::Error::new(
                     &b"moredata"[..],
                     nom::error::ErrorKind::Fail
                 )))
             );
             assert_eq!(
-                tuple(&b"no_tuple"[..]),
+                tuple(b"no_tuple"),
                 Err(nom::Err::Error(nom::error::Error::new(
                     &b"no_tuple"[..],
                     nom::error::ErrorKind::Fail
                 )))
             );
-            assert_eq!(tuple(&b""[..]), Ok((&b""[..], Tuple::new())));
+            assert_eq!(tuple(b""), Ok((&b""[..], Tuple::new())));
             assert_eq!(
-                tuple(&b"\x14"[..]),
+                tuple(b"\x14"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_i64(0);
+                    t.push_back::<i64>(0);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x14"[..]),
+                tuple(b"\x14"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_bigint(BigInt::parse_bytes(b"0", 10).unwrap());
+                    t.push_back::<BigInt>(BigInt::parse_bytes(b"0", 10).unwrap());
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x15\x01"[..]),
+                tuple(b"\x15\x01"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_i64(1);
+                    t.push_back::<i64>(1);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x15\x01"[..]),
+                tuple(b"\x15\x01"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_bigint(BigInt::parse_bytes(b"1", 10).unwrap());
+                    t.push_back::<BigInt>(BigInt::parse_bytes(b"1", 10).unwrap());
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x13\xFE"[..]),
+                tuple(b"\x13\xFE"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_i64(-1);
+                    t.push_back::<i64>(-1);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x13\xFE"[..]),
+                tuple(b"\x13\xFE"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_bigint(BigInt::parse_bytes(b"-1", 10).unwrap());
+                    t.push_back::<BigInt>(BigInt::parse_bytes(b"-1", 10).unwrap());
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x15\xFF"[..]),
+                tuple(b"\x15\xFF"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_i64(255);
+                    t.push_back::<i64>(255);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x15\xFF"[..]),
+                tuple(b"\x15\xFF"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_bigint(BigInt::parse_bytes(b"255", 10).unwrap());
+                    t.push_back::<BigInt>(BigInt::parse_bytes(b"255", 10).unwrap());
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x13\x00"[..]),
+                tuple(b"\x13\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_i64(-255);
+                    t.push_back::<i64>(-255);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x13\x00"[..]),
+                tuple(b"\x13\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_bigint(BigInt::parse_bytes(b"-255", 10).unwrap());
+                    t.push_back::<BigInt>(BigInt::parse_bytes(b"-255", 10).unwrap());
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x16\x01\x00"[..]),
+                tuple(b"\x16\x01\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_i64(256);
+                    t.push_back::<i64>(256);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x16\x01\x00"[..]),
+                tuple(b"\x16\x01\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_bigint(BigInt::parse_bytes(b"256", 10).unwrap());
+                    t.push_back::<BigInt>(BigInt::parse_bytes(b"256", 10).unwrap());
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x17\x01\x00\x00"[..]),
+                tuple(b"\x17\x01\x00\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_i32(65536);
+                    t.push_back::<i32>(65536);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x11\xFE\xFF\xFF"[..]),
+                tuple(b"\x11\xFE\xFF\xFF"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_i32(-65536);
+                    t.push_back::<i32>(-65536);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x1C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF"[..]),
+                tuple(b"\x1C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_i64(i64::MAX);
+                    t.push_back::<i64>(i64::MAX);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x1C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF"[..]),
+                tuple(b"\x1C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_bigint(BigInt::parse_bytes(b"9223372036854775807", 10).unwrap());
+                    t.push_back::<BigInt>(BigInt::parse_bytes(b"9223372036854775807", 10).unwrap());
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x1C\x80\x00\x00\x00\x00\x00\x00\x00"[..]),
+                tuple(b"\x1C\x80\x00\x00\x00\x00\x00\x00\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_bigint(BigInt::parse_bytes(b"9223372036854775808", 10).unwrap());
+                    t.push_back::<BigInt>(BigInt::parse_bytes(b"9223372036854775808", 10).unwrap());
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x1C\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"[..]),
+                tuple(b"\x1C\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_bigint(BigInt::parse_bytes(b"18446744073709551615", 10).unwrap());
+                    t.push_back::<BigInt>(
+                        BigInt::parse_bytes(b"18446744073709551615", 10).unwrap(),
+                    );
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x1D\x09\x01\x00\x00\x00\x00\x00\x00\x00\x00"[..]),
+                tuple(b"\x1D\x09\x01\x00\x00\x00\x00\x00\x00\x00\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_bigint(BigInt::parse_bytes(b"18446744073709551616", 10).unwrap());
+                    t.push_back::<BigInt>(
+                        BigInt::parse_bytes(b"18446744073709551616", 10).unwrap(),
+                    );
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x10\x00\x00\x00\x00"[..]),
+                tuple(b"\x10\x00\x00\x00\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_i64(-4294967295);
+                    t.push_back::<i64>(-4294967295);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x10\x00\x00\x00\x00"[..]),
+                tuple(b"\x10\x00\x00\x00\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_bigint(BigInt::parse_bytes(b"-4294967295", 10).unwrap());
+                    t.push_back::<BigInt>(BigInt::parse_bytes(b"-4294967295", 10).unwrap());
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x0C\x80\x00\x00\x00\x00\x00\x00\x01"[..]),
+                tuple(b"\x0C\x80\x00\x00\x00\x00\x00\x00\x01"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_i64(i64::MIN + 2);
+                    t.push_back::<i64>(i64::MIN + 2);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x0C\x80\x00\x00\x00\x00\x00\x00\x00"[..]),
+                tuple(b"\x0C\x80\x00\x00\x00\x00\x00\x00\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_i64(i64::MIN + 1);
+                    t.push_back::<i64>(i64::MIN + 1);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x0C\x80\x00\x00\x00\x00\x00\x00\x00"[..]),
+                tuple(b"\x0C\x80\x00\x00\x00\x00\x00\x00\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_bigint(
+                    t.push_back::<BigInt>(
                         // i64::MIN + 1
                         BigInt::parse_bytes(b"-9223372036854775808", 10).unwrap() + 1,
                     );
@@ -2091,18 +2081,18 @@ pub(self) mod parser {
                 }))
             );
             assert_eq!(
-                tuple(&b"\x0C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF"[..]),
+                tuple(b"\x0C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_i64(i64::MIN);
+                    t.push_back::<i64>(i64::MIN);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x0C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF"[..]),
+                tuple(b"\x0C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_bigint(
+                    t.push_back::<BigInt>(
                         // i64::MIN
                         BigInt::parse_bytes(b"-9223372036854775808", 10).unwrap(),
                     );
@@ -2110,10 +2100,10 @@ pub(self) mod parser {
                 }))
             );
             assert_eq!(
-                tuple(&b"\x0C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFE"[..]),
+                tuple(b"\x0C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFE"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_bigint(
+                    t.push_back::<BigInt>(
                         // i64::MIN - 1
                         BigInt::parse_bytes(b"-9223372036854775808", 10).unwrap() - 1,
                     );
@@ -2121,276 +2111,280 @@ pub(self) mod parser {
                 }))
             );
             assert_eq!(
-                tuple(&b"\x0C\x00\x00\x00\x00\x00\x00\x00\x00"[..]),
+                tuple(b"\x0C\x00\x00\x00\x00\x00\x00\x00\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_bigint(BigInt::parse_bytes(b"-18446744073709551615", 10).unwrap());
+                    t.push_back::<BigInt>(
+                        BigInt::parse_bytes(b"-18446744073709551615", 10).unwrap(),
+                    );
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x20\xC0\x48\xF5\xC3"[..]),
+                tuple(b"\x20\xC0\x48\xF5\xC3"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_f32(3.14f32);
+                    t.push_back::<f32>(3.14f32);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x20\x3F\xB7\x0A\x3C"[..]),
+                tuple(b"\x20\x3F\xB7\x0A\x3C"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_f32(-3.14f32);
+                    t.push_back::<f32>(-3.14f32);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x21\xC0\x09\x1E\xB8\x51\xEB\x85\x1F"[..]),
+                tuple(b"\x21\xC0\x09\x1E\xB8\x51\xEB\x85\x1F"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_f64(3.14f64);
+                    t.push_back::<f64>(3.14f64);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x21\x3F\xF6\xE1\x47\xAE\x14\x7A\xE0"[..]),
+                tuple(b"\x21\x3F\xF6\xE1\x47\xAE\x14\x7A\xE0"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_f64(-3.14f64);
+                    t.push_back::<f64>(-3.14f64);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x20\x80\x00\x00\x00"[..]),
+                tuple(b"\x20\x80\x00\x00\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_f32(0.0f32);
+                    t.push_back::<f32>(0.0f32);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x20\x7F\xFF\xFF\xFF"[..]),
+                tuple(b"\x20\x7F\xFF\xFF\xFF"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_f32(-0.0f32);
+                    t.push_back::<f32>(-0.0f32);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x21\x80\x00\x00\x00\x00\x00\x00\x00"[..]),
+                tuple(b"\x21\x80\x00\x00\x00\x00\x00\x00\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_f64(0.0f64);
+                    t.push_back::<f64>(0.0f64);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x21\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF"[..]),
+                tuple(b"\x21\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_f64(-0.0f64);
+                    t.push_back::<f64>(-0.0f64);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x20\xFF\x80\x00\x00"[..]),
+                tuple(b"\x20\xFF\x80\x00\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_f32(f32::INFINITY);
+                    t.push_back::<f32>(f32::INFINITY);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x20\x00\x7F\xFF\xFF"[..]),
+                tuple(b"\x20\x00\x7F\xFF\xFF"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_f32(f32::NEG_INFINITY);
+                    t.push_back::<f32>(f32::NEG_INFINITY);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x21\xFF\xF0\x00\x00\x00\x00\x00\x00"[..]),
+                tuple(b"\x21\xFF\xF0\x00\x00\x00\x00\x00\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_f64(f64::INFINITY);
+                    t.push_back::<f64>(f64::INFINITY);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x21\x00\x0F\xFF\xFF\xFF\xFF\xFF\xFF"[..]),
+                tuple(b"\x21\x00\x0F\xFF\xFF\xFF\xFF\xFF\xFF"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_f64(f64::NEG_INFINITY);
+                    t.push_back::<f64>(f64::NEG_INFINITY);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x01\x00"[..]),
+                tuple(b"\x01\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_bytes(Bytes::new());
+                    t.push_back::<Bytes>(Bytes::new());
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x01\x01\x02\x03\x00"[..]),
+                tuple(b"\x01\x01\x02\x03\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_bytes(Bytes::from_static(&b"\x01\x02\x03"[..]));
+                    t.push_back::<Bytes>(Bytes::from_static(&b"\x01\x02\x03"[..]));
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x01\x00\xFF\x00\xFF\x00\xFF\x04\x00"[..]),
+                tuple(b"\x01\x00\xFF\x00\xFF\x00\xFF\x04\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_bytes(Bytes::from_static(&b"\x00\x00\x00\x04"[..]));
+                    t.push_back::<Bytes>(Bytes::from_static(&b"\x00\x00\x00\x04"[..]));
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x02\x00"[..]),
+                tuple(b"\x02\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_string("".to_string());
+                    t.push_back::<String>("".to_string());
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x02hello\x00"[..]),
+                tuple(b"\x02hello\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_string("hello".to_string());
+                    t.push_back::<String>("hello".to_string());
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x02\xE4\xB8\xAD\xE6\x96\x87\x00"[..]),
+                tuple(b"\x02\xE4\xB8\xAD\xE6\x96\x87\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_string("中文".to_string());
+                    t.push_back::<String>("中文".to_string());
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x02\xCE\xBC\xCE\xAC\xCE\xB8\xCE\xB7\xCE\xBC\xCE\xB1\x00"[..]),
+                tuple(b"\x02\xCE\xBC\xCE\xAC\xCE\xB8\xCE\xB7\xCE\xBC\xCE\xB1\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_string("μάθημα".to_string());
+                    t.push_back::<String>("μάθημα".to_string());
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x02\xF4\x8F\xBF\xBF\x00"[..]),
+                tuple(b"\x02\xF4\x8F\xBF\xBF\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_string("\u{10ffff}".to_string());
+                    t.push_back::<String>("\u{10ffff}".to_string());
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x05\x00\xFF\x00"[..]),
+                tuple(b"\x05\x00\xFF\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_tuple({
+                    t.push_back::<Tuple>({
                         let mut t1 = Tuple::new();
-                        t1.add_null();
+                        t1.push_back::<Null>(Null);
                         t1
                     });
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x05\x00\xFF\x02hello\x00\x00"[..]),
+                tuple(b"\x05\x00\xFF\x02hello\x00\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_tuple({
+                    t.push_back::<Tuple>({
                         let mut t1 = Tuple::new();
-                        t1.add_null();
-                        t1.add_string("hello".to_string());
+                        t1.push_back::<Null>(Null);
+                        t1.push_back::<String>("hello".to_string());
                         t1
                     });
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x05\x00\xFF\x02hell\x00\xFF\x00\x00"[..]),
+                tuple(b"\x05\x00\xFF\x02hell\x00\xFF\x00\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_tuple({
+                    t.push_back::<Tuple>({
                         let mut t1 = Tuple::new();
-                        t1.add_null();
-                        t1.add_string("hell\x00".to_string());
+                        t1.push_back::<Null>(Null);
+                        t1.push_back::<String>("hell\x00".to_string());
                         t1
                     });
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x05\x00\xFF\x00\x02hello\x00"[..]),
+                tuple(b"\x05\x00\xFF\x00\x02hello\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_tuple({
+                    t.push_back::<Tuple>({
                         let mut t1 = Tuple::new();
-                        t1.add_null();
+                        t1.push_back::<Null>(Null);
                         t1
                     });
-                    t.add_string("hello".to_string());
+                    t.push_back::<String>("hello".to_string());
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x05\x00\xFF\x00\x02hello\x00\x01\x01\x00\xFF\x00\x01\x00"[..]),
+                tuple(b"\x05\x00\xFF\x00\x02hello\x00\x01\x01\x00\xFF\x00\x01\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_tuple({
+                    t.push_back::<Tuple>({
                         let mut t1 = Tuple::new();
-                        t1.add_null();
+                        t1.push_back::<Null>(Null);
                         t1
                     });
-                    t.add_string("hello".to_string());
-                    t.add_bytes(Bytes::from_static(&b"\x01\x00"[..]));
-                    t.add_bytes(Bytes::new());
+                    t.push_back::<String>("hello".to_string());
+                    t.push_back::<Bytes>(Bytes::from_static(&b"\x01\x00"[..]));
+                    t.push_back::<Bytes>(Bytes::new());
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x30\xFF\xFF\xFF\xFF\xBA\x5E\xBA\x11\x00\x00\x00\x00\x5C\xA1\xAB\x1E"[..]),
+                tuple(b"\x30\xFF\xFF\xFF\xFF\xBA\x5E\xBA\x11\x00\x00\x00\x00\x5C\xA1\xAB\x1E"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_uuid(Uuid::parse_str("ffffffff-ba5e-ba11-0000-00005ca1ab1e").unwrap());
+                    t.push_back::<Uuid>(
+                        Uuid::parse_str("ffffffff-ba5e-ba11-0000-00005ca1ab1e").unwrap(),
+                    );
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x26"[..]),
+                tuple(b"\x26"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_bool(false);
+                    t.push_back::<bool>(false);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x27"[..]),
+                tuple(b"\x27"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_bool(true);
+                    t.push_back::<bool>(true);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x15\x03"[..]),
+                tuple(b"\x15\x03"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_i8(3);
+                    t.push_back::<i8>(3);
                     t
                 }))
             );
             assert_eq!(
-                tuple(&b"\x33\xAA\xBB\xCC\xDD\xEE\xFF\x00\x01\x02\x03\x00\x00"[..]),
+                tuple(b"\x33\xAA\xBB\xCC\xDD\xEE\xFF\x00\x01\x02\x03\x00\x00"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_versionstamp(Versionstamp::complete(
+                    t.push_back::<Versionstamp>(Versionstamp::complete(
                         Bytes::from_static(&b"\xAA\xBB\xCC\xDD\xEE\xFF\x00\x01\x02\x03"[..]),
                         0,
                     ));
@@ -2398,10 +2392,10 @@ pub(self) mod parser {
                 }))
             );
             assert_eq!(
-                tuple(&b"\x33\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x02\x91"[..]),
+                tuple(b"\x33\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x02\x91"),
                 Ok((&b""[..], {
                     let mut t = Tuple::new();
-                    t.add_versionstamp(Versionstamp::complete(
+                    t.push_back::<Versionstamp>(Versionstamp::complete(
                         Bytes::from_static(&b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"[..]),
                         657,
                     ));
@@ -2413,18 +2407,18 @@ pub(self) mod parser {
         #[test]
         fn test_null_value() {
             assert_eq!(
-                null_value(&b"\x00moredata"[..]),
+                null_value(b"\x00moredata"),
                 Ok((&b"moredata"[..], TupleValue::NullValue))
             );
             assert_eq!(
-                null_value(&b"no_null_value"[..]),
+                null_value(b"no_null_value"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_null_value"[..],
                     ErrorKind::Tag
                 )))
             );
             assert_eq!(
-                tuple_extractor::null_value(null_value(&b"\x00moredata"[..]).unwrap().1),
+                tuple_extractor::null_value(null_value(b"\x00moredata").unwrap().1),
                 Ok(())
             );
         }
@@ -2432,11 +2426,11 @@ pub(self) mod parser {
         #[test]
         fn test_nested_tuple_null_value() {
             assert_eq!(
-                nested_tuple_null_value(&b"\x00\xFFmoredata"[..]),
+                nested_tuple_null_value(b"\x00\xFFmoredata"),
                 Ok((&b"moredata"[..], TupleValue::NullValue))
             );
             assert_eq!(
-                null_value(&b"no_nested_tuple_null_value"[..]),
+                null_value(b"no_nested_tuple_null_value"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_nested_tuple_null_value"[..],
                     ErrorKind::Tag
@@ -2444,7 +2438,7 @@ pub(self) mod parser {
             );
             assert_eq!(
                 tuple_extractor::nested_tuple_null_value(
-                    nested_tuple_null_value(&b"\x00\xFFmoredata"[..]).unwrap().1
+                    nested_tuple_null_value(b"\x00\xFFmoredata").unwrap().1
                 ),
                 Ok(())
             );
@@ -2453,43 +2447,43 @@ pub(self) mod parser {
         #[test]
         fn test_byte_string() {
             assert_eq!(
-                byte_string(&b"\x01\x00"[..]),
+                byte_string(b"\x01\x00"),
                 Ok((&b""[..], TupleValue::ByteString(Bytes::new())))
             );
             assert_eq!(
-                byte_string(&b"\x01\x00moredata"[..]),
+                byte_string(b"\x01\x00moredata"),
                 Ok((&b"moredata"[..], TupleValue::ByteString(Bytes::new())))
             );
             assert_eq!(
-                byte_string(&b"\x01\x01\x02\x03\x00"[..]),
+                byte_string(b"\x01\x01\x02\x03\x00"),
                 Ok((
                     &b""[..],
-                    TupleValue::ByteString(Bytes::from_static(&b"\x01\x02\x03"[..]))
+                    TupleValue::ByteString(Bytes::from_static(b"\x01\x02\x03"))
                 ))
             );
             assert_eq!(
-                byte_string(&b"\x01\x01\x02\x03\x00moredata"[..]),
+                byte_string(b"\x01\x01\x02\x03\x00moredata"),
                 Ok((
                     &b"moredata"[..],
-                    TupleValue::ByteString(Bytes::from_static(&b"\x01\x02\x03"[..]))
+                    TupleValue::ByteString(Bytes::from_static(b"\x01\x02\x03"))
                 ))
             );
             assert_eq!(
-                byte_string(&b"\x01\x00\xFF\x00\xFF\x00\xFF\x04\x00"[..]),
+                byte_string(b"\x01\x00\xFF\x00\xFF\x00\xFF\x04\x00"),
                 Ok((
                     &b""[..],
-                    TupleValue::ByteString(Bytes::from_static(&b"\x00\x00\x00\x04"[..]))
+                    TupleValue::ByteString(Bytes::from_static(b"\x00\x00\x00\x04"))
                 ))
             );
             assert_eq!(
-                byte_string(&b"\x01\x00\xFF\x00\xFF\x00\xFF\x04\x00moredata"[..]),
+                byte_string(b"\x01\x00\xFF\x00\xFF\x00\xFF\x04\x00moredata"),
                 Ok((
                     &b"moredata"[..],
-                    TupleValue::ByteString(Bytes::from_static(&b"\x00\x00\x00\x04"[..]))
+                    TupleValue::ByteString(Bytes::from_static(b"\x00\x00\x00\x04"))
                 ))
             );
             assert_eq!(
-                byte_string(&b"no_byte_string"[..]),
+                byte_string(b"no_byte_string"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_byte_string"[..],
                     ErrorKind::Tag
@@ -2497,60 +2491,58 @@ pub(self) mod parser {
             );
             assert_eq!(
                 tuple_extractor::byte_string(
-                    byte_string(&b"\x01\x01\x02\x03\x00moredata"[..]).unwrap().1
+                    byte_string(b"\x01\x01\x02\x03\x00moredata").unwrap().1
                 )
                 .unwrap(),
-                Bytes::from_static(&b"\x01\x02\x03"[..])
+                Bytes::from_static(b"\x01\x02\x03")
             );
         }
 
         #[test]
         fn test_unicode_string() {
             assert_eq!(
-                unicode_string(&b"\x02\x00"[..]),
+                unicode_string(b"\x02\x00"),
                 Ok((&b""[..], TupleValue::UnicodeString("".to_string())))
             );
             assert_eq!(
-                unicode_string(&b"\x02\x00moredata"[..]),
+                unicode_string(b"\x02\x00moredata"),
                 Ok((&b"moredata"[..], TupleValue::UnicodeString("".to_string())))
             );
             assert_eq!(
-                unicode_string(&b"\x02hello\x00"[..]),
+                unicode_string(b"\x02hello\x00"),
                 Ok((&b""[..], TupleValue::UnicodeString("hello".to_string())))
             );
             assert_eq!(
-                unicode_string(&b"\x02hello\x00moredata"[..]),
+                unicode_string(b"\x02hello\x00moredata"),
                 Ok((
                     &b"moredata"[..],
                     TupleValue::UnicodeString("hello".to_string())
                 ))
             );
             assert_eq!(
-                unicode_string(&b"\x02\xE4\xB8\xAD\xE6\x96\x87\x00"[..]),
+                unicode_string(b"\x02\xE4\xB8\xAD\xE6\x96\x87\x00"),
                 Ok((&b""[..], TupleValue::UnicodeString("中文".to_string())))
             );
             assert_eq!(
-                unicode_string(&b"\x02\xE4\xB8\xAD\xE6\x96\x87\x00moredata"[..]),
+                unicode_string(b"\x02\xE4\xB8\xAD\xE6\x96\x87\x00moredata"),
                 Ok((
                     &b"moredata"[..],
                     TupleValue::UnicodeString("中文".to_string())
                 ))
             );
             assert_eq!(
-                unicode_string(&b"\x02\xCE\xBC\xCE\xAC\xCE\xB8\xCE\xB7\xCE\xBC\xCE\xB1\x00"[..]),
+                unicode_string(b"\x02\xCE\xBC\xCE\xAC\xCE\xB8\xCE\xB7\xCE\xBC\xCE\xB1\x00"),
                 Ok((&b""[..], TupleValue::UnicodeString("μάθημα".to_string())))
             );
             assert_eq!(
-                unicode_string(
-                    &b"\x02\xCE\xBC\xCE\xAC\xCE\xB8\xCE\xB7\xCE\xBC\xCE\xB1\x00moredata"[..]
-                ),
+                unicode_string(b"\x02\xCE\xBC\xCE\xAC\xCE\xB8\xCE\xB7\xCE\xBC\xCE\xB1\x00moredata"),
                 Ok((
                     &b"moredata"[..],
                     TupleValue::UnicodeString("μάθημα".to_string())
                 ))
             );
             assert_eq!(
-                byte_string(&b"no_unicode_string"[..]),
+                byte_string(b"no_unicode_string"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_unicode_string"[..],
                     ErrorKind::Tag
@@ -2558,7 +2550,7 @@ pub(self) mod parser {
             );
             assert_eq!(
                 tuple_extractor::unicode_string(
-                    unicode_string(&b"\x02hello\x00moredata"[..]).unwrap().1
+                    unicode_string(b"\x02hello\x00moredata").unwrap().1
                 )
                 .unwrap(),
                 "hello".to_string()
@@ -2568,21 +2560,21 @@ pub(self) mod parser {
         #[test]
         fn test_nested_tuple() {
             assert_eq!(
-                nested_tuple(&b"\x05\x00\xFF\x00"[..]),
+                nested_tuple(b"\x05\x00\xFF\x00"),
                 Ok((
                     &b""[..],
                     TupleValue::NestedTuple(Tuple::from_elements(vec![TupleValue::NullValue]))
                 ))
             );
             assert_eq!(
-                nested_tuple(&b"\x05\x00\xFF\x00moredata"[..]),
+                nested_tuple(b"\x05\x00\xFF\x00moredata"),
                 Ok((
                     &b"moredata"[..],
                     TupleValue::NestedTuple(Tuple::from_elements(vec![TupleValue::NullValue]))
                 ))
             );
             assert_eq!(
-                nested_tuple(&b"\x05\x00\xFF\x02hello\x00\x00"[..]),
+                nested_tuple(b"\x05\x00\xFF\x02hello\x00\x00"),
                 Ok((
                     &b""[..],
                     TupleValue::NestedTuple(Tuple::from_elements(vec![
@@ -2592,7 +2584,7 @@ pub(self) mod parser {
                 ))
             );
             assert_eq!(
-                nested_tuple(&b"\x05\x00\xFF\x02hello\x00\x00moredata"[..]),
+                nested_tuple(b"\x05\x00\xFF\x02hello\x00\x00moredata"),
                 Ok((
                     &b"moredata"[..],
                     TupleValue::NestedTuple(Tuple::from_elements(vec![
@@ -2602,7 +2594,7 @@ pub(self) mod parser {
                 ))
             );
             assert_eq!(
-                nested_tuple(&b"\x05\x00\xFF\x02hell\x00\xFF\x00\x00"[..]),
+                nested_tuple(b"\x05\x00\xFF\x02hell\x00\xFF\x00\x00"),
                 Ok((
                     &b""[..],
                     TupleValue::NestedTuple(Tuple::from_elements(vec![
@@ -2612,7 +2604,7 @@ pub(self) mod parser {
                 ))
             );
             assert_eq!(
-                nested_tuple(&b"\x05\x00\xFF\x02hell\x00\xFF\x00\x00moredata"[..]),
+                nested_tuple(b"\x05\x00\xFF\x02hell\x00\xFF\x00\x00moredata"),
                 Ok((
                     &b"moredata"[..],
                     TupleValue::NestedTuple(Tuple::from_elements(vec![
@@ -2622,21 +2614,21 @@ pub(self) mod parser {
                 ))
             );
             assert_eq!(
-                nested_tuple(&b"\x05\x00\xFF\x34hello\x00\x00"[..]),
+                nested_tuple(b"\x05\x00\xFF\x34hello\x00\x00"),
                 Err(nom::Err::Error(nom::error::Error::new(
                     &b"\x34hello\x00\x00"[..],
                     nom::error::ErrorKind::Fail
                 )))
             );
             assert_eq!(
-                nested_tuple(&b"\x05"[..]),
+                nested_tuple(b"\x05"),
                 Err(nom::Err::Error(nom::error::Error::new(
                     &b""[..],
                     nom::error::ErrorKind::Eof
                 )))
             );
             assert_eq!(
-                nested_tuple(&b"no_nested_tuple"[..]),
+                nested_tuple(b"no_nested_tuple"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_nested_tuple"[..],
                     ErrorKind::Tag
@@ -2644,7 +2636,7 @@ pub(self) mod parser {
             );
             assert_eq!(
                 tuple_extractor::nested_tuple(
-                    nested_tuple(&b"\x05\x00\xFF\x02hell\x00\xFF\x00\x00moredata"[..])
+                    nested_tuple(b"\x05\x00\xFF\x02hell\x00\xFF\x00\x00moredata")
                         .unwrap()
                         .1
                 )
@@ -2660,7 +2652,7 @@ pub(self) mod parser {
         fn test_negative_arbitrary_precision_integer() {
             assert_eq!(
                 negative_arbitrary_precision_integer(
-                    &b"\x0B\xF6\xFE\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFFmoredata"[..]
+                    b"\x0B\xF6\xFE\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFFmoredata"
                 ),
                 Ok((
                     &b"moredata"[..],
@@ -2670,18 +2662,14 @@ pub(self) mod parser {
                 ))
             );
             assert_eq!(
-                positive_arbitrary_precision_integer(
-                    &b"no_negative_arbitrary_precision_integer"[..]
-                ),
+                positive_arbitrary_precision_integer(b"no_negative_arbitrary_precision_integer"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_negative_arbitrary_precision_integer"[..],
                     ErrorKind::Tag
                 )))
             );
             assert_eq!(
-                negative_arbitrary_precision_integer(
-                    &b"\x0B\xF6\xFE\xFF\xFF\xFF\xFF\xFF\xFF\xFF"[..]
-                ),
+                negative_arbitrary_precision_integer(b"\x0B\xF6\xFE\xFF\xFF\xFF\xFF\xFF\xFF\xFF"),
                 Err(nom::Err::Error(nom::error::Error::new(
                     &b"\xFE\xFF\xFF\xFF\xFF\xFF\xFF\xFF"[..],
                     nom::error::ErrorKind::Eof
@@ -2690,7 +2678,7 @@ pub(self) mod parser {
             assert_eq!(
                 tuple_extractor::negative_arbitrary_precision_integer(
                     negative_arbitrary_precision_integer(
-                        &b"\x0B\xF6\xFE\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFFmoredata"[..]
+                        b"\x0B\xF6\xFE\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFFmoredata"
                     )
                     .unwrap()
                     .1
@@ -2703,15 +2691,15 @@ pub(self) mod parser {
         #[test]
         fn test_neg_int_8() {
             assert_eq!(
-                neg_int_8(&b"\x0C\x00\x00\x00\x00\x00\x00\x00\x00moredata"[..]),
+                neg_int_8(b"\x0C\x00\x00\x00\x00\x00\x00\x00\x00moredata"),
                 Ok((&b"moredata"[..], TupleValue::NegInt8(18446744073709551615)))
             );
             assert_eq!(
-                neg_int_8(&b"\x0C\xFE\xFF\xFF\xFF\xFF\xFF\xFF\xFFmoredata"[..]),
+                neg_int_8(b"\x0C\xFE\xFF\xFF\xFF\xFF\xFF\xFF\xFFmoredata"),
                 Ok((&b"moredata"[..], TupleValue::NegInt8(72057594037927936)))
             );
             assert_eq!(
-                neg_int_8(&b"no_neg_int_8"[..]),
+                neg_int_8(b"no_neg_int_8"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_neg_int_8"[..],
                     ErrorKind::Tag
@@ -2719,7 +2707,7 @@ pub(self) mod parser {
             );
             assert_eq!(
                 tuple_extractor::neg_int_8_bigint(
-                    neg_int_8(&b"\x0C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFEmoredata"[..])
+                    neg_int_8(b"\x0C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFEmoredata")
                         .unwrap()
                         .1
                 )
@@ -2728,7 +2716,7 @@ pub(self) mod parser {
             );
             assert_eq!(
                 tuple_extractor::neg_int_8_i64(
-                    neg_int_8(&b"\x0C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFFmoredata"[..])
+                    neg_int_8(b"\x0C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFFmoredata")
                         .unwrap()
                         .1
                 )
@@ -2740,15 +2728,15 @@ pub(self) mod parser {
         #[test]
         fn test_neg_int_7() {
             assert_eq!(
-                neg_int_7(&b"\x0D\x00\x00\x00\x00\x00\x00\x00moredata"[..]),
+                neg_int_7(b"\x0D\x00\x00\x00\x00\x00\x00\x00moredata"),
                 Ok((&b"moredata"[..], TupleValue::NegInt7(72057594037927935)))
             );
             assert_eq!(
-                neg_int_7(&b"\x0D\xFE\xFF\xFF\xFF\xFF\xFF\xFFmoredata"[..]),
+                neg_int_7(b"\x0D\xFE\xFF\xFF\xFF\xFF\xFF\xFFmoredata"),
                 Ok((&b"moredata"[..], TupleValue::NegInt7(281474976710656)))
             );
             assert_eq!(
-                neg_int_7(&b"no_neg_int_7"[..]),
+                neg_int_7(b"no_neg_int_7"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_neg_int_7"[..],
                     ErrorKind::Tag
@@ -2756,7 +2744,7 @@ pub(self) mod parser {
             );
             assert_eq!(
                 tuple_extractor::neg_int_7_i64(
-                    neg_int_7(&b"\x0D\x00\x00\x00\x00\x00\x00\x00moredata"[..])
+                    neg_int_7(b"\x0D\x00\x00\x00\x00\x00\x00\x00moredata")
                         .unwrap()
                         .1
                 )
@@ -2765,7 +2753,7 @@ pub(self) mod parser {
             );
             assert_eq!(
                 tuple_extractor::neg_int_7_i64(
-                    neg_int_7(&b"\x0D\xFE\xFF\xFF\xFF\xFF\xFF\xFFmoredata"[..])
+                    neg_int_7(b"\x0D\xFE\xFF\xFF\xFF\xFF\xFF\xFFmoredata")
                         .unwrap()
                         .1
                 )
@@ -2777,15 +2765,15 @@ pub(self) mod parser {
         #[test]
         fn test_neg_int_6() {
             assert_eq!(
-                neg_int_6(&b"\x0E\x00\x00\x00\x00\x00\x00moredata"[..]),
+                neg_int_6(b"\x0E\x00\x00\x00\x00\x00\x00moredata"),
                 Ok((&b"moredata"[..], TupleValue::NegInt6(281474976710655)))
             );
             assert_eq!(
-                neg_int_6(&b"\x0E\xFE\xFF\xFF\xFF\xFF\xFFmoredata"[..]),
+                neg_int_6(b"\x0E\xFE\xFF\xFF\xFF\xFF\xFFmoredata"),
                 Ok((&b"moredata"[..], TupleValue::NegInt6(1099511627776)))
             );
             assert_eq!(
-                neg_int_6(&b"no_neg_int_6"[..]),
+                neg_int_6(b"no_neg_int_6"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_neg_int_6"[..],
                     ErrorKind::Tag
@@ -2793,7 +2781,7 @@ pub(self) mod parser {
             );
             assert_eq!(
                 tuple_extractor::neg_int_6_i64(
-                    neg_int_6(&b"\x0E\x00\x00\x00\x00\x00\x00moredata"[..])
+                    neg_int_6(b"\x0E\x00\x00\x00\x00\x00\x00moredata")
                         .unwrap()
                         .1
                 )
@@ -2802,7 +2790,7 @@ pub(self) mod parser {
             );
             assert_eq!(
                 tuple_extractor::neg_int_6_i64(
-                    neg_int_6(&b"\x0E\xFE\xFF\xFF\xFF\xFF\xFFmoredata"[..])
+                    neg_int_6(b"\x0E\xFE\xFF\xFF\xFF\xFF\xFFmoredata")
                         .unwrap()
                         .1
                 )
@@ -2814,15 +2802,15 @@ pub(self) mod parser {
         #[test]
         fn test_neg_int_5() {
             assert_eq!(
-                neg_int_5(&b"\x0F\x00\x00\x00\x00\x00moredata"[..]),
+                neg_int_5(b"\x0F\x00\x00\x00\x00\x00moredata"),
                 Ok((&b"moredata"[..], TupleValue::NegInt5(1099511627775)))
             );
             assert_eq!(
-                neg_int_5(&b"\x0F\xFE\xFF\xFF\xFF\xFFmoredata"[..]),
+                neg_int_5(b"\x0F\xFE\xFF\xFF\xFF\xFFmoredata"),
                 Ok((&b"moredata"[..], TupleValue::NegInt5(4294967296)))
             );
             assert_eq!(
-                neg_int_5(&b"no_neg_int_5"[..]),
+                neg_int_5(b"no_neg_int_5"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_neg_int_5"[..],
                     ErrorKind::Tag
@@ -2830,18 +2818,14 @@ pub(self) mod parser {
             );
             assert_eq!(
                 tuple_extractor::neg_int_5_i64(
-                    neg_int_5(&b"\x0F\x00\x00\x00\x00\x00moredata"[..])
-                        .unwrap()
-                        .1
+                    neg_int_5(b"\x0F\x00\x00\x00\x00\x00moredata").unwrap().1
                 )
                 .unwrap(),
                 -1099511627775i64
             );
             assert_eq!(
                 tuple_extractor::neg_int_5_i64(
-                    neg_int_5(&b"\x0F\xFE\xFF\xFF\xFF\xFFmoredata"[..])
-                        .unwrap()
-                        .1
+                    neg_int_5(b"\x0F\xFE\xFF\xFF\xFF\xFFmoredata").unwrap().1
                 )
                 .unwrap(),
                 -4294967296i64
@@ -2851,15 +2835,15 @@ pub(self) mod parser {
         #[test]
         fn test_neg_int_4() {
             assert_eq!(
-                neg_int_4(&b"\x10\x00\x00\x00\x00moredata"[..]),
+                neg_int_4(b"\x10\x00\x00\x00\x00moredata"),
                 Ok((&b"moredata"[..], TupleValue::NegInt4(4294967295)))
             );
             assert_eq!(
-                neg_int_4(&b"\x10\xFE\xFF\xFF\xFFmoredata"[..]),
+                neg_int_4(b"\x10\xFE\xFF\xFF\xFFmoredata"),
                 Ok((&b"moredata"[..], TupleValue::NegInt4(16777216)))
             );
             assert_eq!(
-                neg_int_4(&b"no_neg_int_4"[..]),
+                neg_int_4(b"no_neg_int_4"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_neg_int_4"[..],
                     ErrorKind::Tag
@@ -2867,14 +2851,14 @@ pub(self) mod parser {
             );
             assert_eq!(
                 tuple_extractor::neg_int_4_i64(
-                    neg_int_4(&b"\x10\x7F\xFF\xFF\xFEmoredata"[..]).unwrap().1
+                    neg_int_4(b"\x10\x7F\xFF\xFF\xFEmoredata").unwrap().1
                 )
                 .unwrap(),
                 -2147483649i64
             );
             assert_eq!(
                 tuple_extractor::neg_int_4_i32(
-                    neg_int_4(&b"\x10\x7F\xFF\xFF\xFFmoredata"[..]).unwrap().1
+                    neg_int_4(b"\x10\x7F\xFF\xFF\xFFmoredata").unwrap().1
                 )
                 .unwrap(),
                 -2147483648i32
@@ -2884,32 +2868,28 @@ pub(self) mod parser {
         #[test]
         fn test_neg_int_3() {
             assert_eq!(
-                neg_int_3(&b"\x11\x00\x00\x00moredata"[..]),
+                neg_int_3(b"\x11\x00\x00\x00moredata"),
                 Ok((&b"moredata"[..], TupleValue::NegInt3(16777215)))
             );
             assert_eq!(
-                neg_int_3(&b"\x11\xFE\xFF\xFFmoredata"[..]),
+                neg_int_3(b"\x11\xFE\xFF\xFFmoredata"),
                 Ok((&b"moredata"[..], TupleValue::NegInt3(65536)))
             );
             assert_eq!(
-                neg_int_3(&b"no_neg_int_3"[..]),
+                neg_int_3(b"no_neg_int_3"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_neg_int_3"[..],
                     ErrorKind::Tag
                 )))
             );
             assert_eq!(
-                tuple_extractor::neg_int_3_i32(
-                    neg_int_3(&b"\x11\x00\x00\x00moredata"[..]).unwrap().1
-                )
-                .unwrap(),
+                tuple_extractor::neg_int_3_i32(neg_int_3(b"\x11\x00\x00\x00moredata").unwrap().1)
+                    .unwrap(),
                 -16777215i32
             );
             assert_eq!(
-                tuple_extractor::neg_int_3_i32(
-                    neg_int_3(&b"\x11\xFE\xFF\xFFmoredata"[..]).unwrap().1
-                )
-                .unwrap(),
+                tuple_extractor::neg_int_3_i32(neg_int_3(b"\x11\xFE\xFF\xFFmoredata").unwrap().1)
+                    .unwrap(),
                 -65536i32
             );
         }
@@ -2917,27 +2897,27 @@ pub(self) mod parser {
         #[test]
         fn test_neg_int_2() {
             assert_eq!(
-                neg_int_2(&b"\x12\x00\x00moredata"[..]),
+                neg_int_2(b"\x12\x00\x00moredata"),
                 Ok((&b"moredata"[..], TupleValue::NegInt2(65535)))
             );
             assert_eq!(
-                neg_int_2(&b"\x12\xFE\xFFmoredata"[..]),
+                neg_int_2(b"\x12\xFE\xFFmoredata"),
                 Ok((&b"moredata"[..], TupleValue::NegInt2(256)))
             );
             assert_eq!(
-                neg_int_2(&b"no_neg_int_2"[..]),
+                neg_int_2(b"no_neg_int_2"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_neg_int_2"[..],
                     ErrorKind::Tag
                 )))
             );
             assert_eq!(
-                tuple_extractor::neg_int_2_i32(neg_int_2(&b"\x12\x7F\xFEmoredata"[..]).unwrap().1)
+                tuple_extractor::neg_int_2_i32(neg_int_2(b"\x12\x7F\xFEmoredata").unwrap().1)
                     .unwrap(),
                 -32769i32
             );
             assert_eq!(
-                tuple_extractor::neg_int_2_i16(neg_int_2(&b"\x12\x7F\xFFmoredata"[..]).unwrap().1)
+                tuple_extractor::neg_int_2_i16(neg_int_2(b"\x12\x7F\xFFmoredata").unwrap().1)
                     .unwrap(),
                 -32768i16
             );
@@ -2946,28 +2926,26 @@ pub(self) mod parser {
         #[test]
         fn test_neg_int_1() {
             assert_eq!(
-                neg_int_1(&b"\x13\x00moredata"[..]),
+                neg_int_1(b"\x13\x00moredata"),
                 Ok((&b"moredata"[..], TupleValue::NegInt1(255)))
             );
             assert_eq!(
-                neg_int_1(&b"\x13\xFEmoredata"[..]),
+                neg_int_1(b"\x13\xFEmoredata"),
                 Ok((&b"moredata"[..], TupleValue::NegInt1(1)))
             );
             assert_eq!(
-                neg_int_1(&b"no_neg_int_1"[..]),
+                neg_int_1(b"no_neg_int_1"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_neg_int_1"[..],
                     ErrorKind::Tag
                 )))
             );
             assert_eq!(
-                tuple_extractor::neg_int_1_i16(neg_int_1(&b"\x13\x7Emoredata"[..]).unwrap().1)
-                    .unwrap(),
+                tuple_extractor::neg_int_1_i16(neg_int_1(b"\x13\x7Emoredata").unwrap().1).unwrap(),
                 -129i16
             );
             assert_eq!(
-                tuple_extractor::neg_int_1_i8(neg_int_1(&b"\x13\x7Fmoredata"[..]).unwrap().1)
-                    .unwrap(),
+                tuple_extractor::neg_int_1_i8(neg_int_1(b"\x13\x7Fmoredata").unwrap().1).unwrap(),
                 -128i8
             );
         }
@@ -2975,18 +2953,18 @@ pub(self) mod parser {
         #[test]
         fn test_int_zero() {
             assert_eq!(
-                int_zero(&b"\x14moredata"[..]),
+                int_zero(b"\x14moredata"),
                 Ok((&b"moredata"[..], TupleValue::IntZero))
             );
             assert_eq!(
-                int_zero(&b"no_int_zero"[..]),
+                int_zero(b"no_int_zero"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_int_zero"[..],
                     ErrorKind::Tag
                 )))
             );
             assert_eq!(
-                tuple_extractor::int_zero(int_zero(&b"\x14moredata"[..]).unwrap().1).unwrap(),
+                tuple_extractor::int_zero(int_zero(b"\x14moredata").unwrap().1).unwrap(),
                 0
             );
         }
@@ -2994,28 +2972,26 @@ pub(self) mod parser {
         #[test]
         fn test_pos_int_1() {
             assert_eq!(
-                pos_int_1(&b"\x15\x01moredata"[..]),
+                pos_int_1(b"\x15\x01moredata"),
                 Ok((&b"moredata"[..], TupleValue::PosInt1(1)))
             );
             assert_eq!(
-                pos_int_1(&b"\x15\xFFmoredata"[..]),
+                pos_int_1(b"\x15\xFFmoredata"),
                 Ok((&b"moredata"[..], TupleValue::PosInt1(255)))
             );
             assert_eq!(
-                pos_int_1(&b"no_pos_int_1"[..]),
+                pos_int_1(b"no_pos_int_1"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_pos_int_1"[..],
                     ErrorKind::Tag
                 )))
             );
             assert_eq!(
-                tuple_extractor::pos_int_1_i8(pos_int_1(&b"\x15\x7Fmoredata"[..]).unwrap().1)
-                    .unwrap(),
+                tuple_extractor::pos_int_1_i8(pos_int_1(b"\x15\x7Fmoredata").unwrap().1).unwrap(),
                 127i8
             );
             assert_eq!(
-                tuple_extractor::pos_int_1_i16(pos_int_1(&b"\x15\x80moredata"[..]).unwrap().1)
-                    .unwrap(),
+                tuple_extractor::pos_int_1_i16(pos_int_1(b"\x15\x80moredata").unwrap().1).unwrap(),
                 128i16
             );
         }
@@ -3023,27 +2999,27 @@ pub(self) mod parser {
         #[test]
         fn test_pos_int_2() {
             assert_eq!(
-                pos_int_2(&b"\x16\x01\x00moredata"[..]),
+                pos_int_2(b"\x16\x01\x00moredata"),
                 Ok((&b"moredata"[..], TupleValue::PosInt2(256)))
             );
             assert_eq!(
-                pos_int_2(&b"\x16\xFF\xFFmoredata"[..]),
+                pos_int_2(b"\x16\xFF\xFFmoredata"),
                 Ok((&b"moredata"[..], TupleValue::PosInt2(65535)))
             );
             assert_eq!(
-                pos_int_2(&b"no_pos_int_2"[..]),
+                pos_int_2(b"no_pos_int_2"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_pos_int_2"[..],
                     ErrorKind::Tag
                 )))
             );
             assert_eq!(
-                tuple_extractor::pos_int_2_i16(pos_int_2(&b"\x16\x7F\xFFmoredata"[..]).unwrap().1)
+                tuple_extractor::pos_int_2_i16(pos_int_2(b"\x16\x7F\xFFmoredata").unwrap().1)
                     .unwrap(),
                 32767i16
             );
             assert_eq!(
-                tuple_extractor::pos_int_2_i32(pos_int_2(&b"\x16\x80\x00moredata"[..]).unwrap().1)
+                tuple_extractor::pos_int_2_i32(pos_int_2(b"\x16\x80\x00moredata").unwrap().1)
                     .unwrap(),
                 32768i32
             );
@@ -3052,32 +3028,28 @@ pub(self) mod parser {
         #[test]
         fn test_pos_int_3() {
             assert_eq!(
-                pos_int_3(&b"\x17\x01\x00\x00moredata"[..]),
+                pos_int_3(b"\x17\x01\x00\x00moredata"),
                 Ok((&b"moredata"[..], TupleValue::PosInt3(65536)))
             );
             assert_eq!(
-                pos_int_3(&b"\x17\xFF\xFF\xFFmoredata"[..]),
+                pos_int_3(b"\x17\xFF\xFF\xFFmoredata"),
                 Ok((&b"moredata"[..], TupleValue::PosInt3(16777215)))
             );
             assert_eq!(
-                pos_int_3(&b"no_pos_int_3"[..]),
+                pos_int_3(b"no_pos_int_3"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_pos_int_3"[..],
                     ErrorKind::Tag
                 )))
             );
             assert_eq!(
-                tuple_extractor::pos_int_3_i32(
-                    pos_int_3(&b"\x17\x01\x00\x00moredata"[..]).unwrap().1
-                )
-                .unwrap(),
+                tuple_extractor::pos_int_3_i32(pos_int_3(b"\x17\x01\x00\x00moredata").unwrap().1)
+                    .unwrap(),
                 65536i32
             );
             assert_eq!(
-                tuple_extractor::pos_int_3_i32(
-                    pos_int_3(&b"\x17\xFF\xFF\xFFmoredata"[..]).unwrap().1
-                )
-                .unwrap(),
+                tuple_extractor::pos_int_3_i32(pos_int_3(b"\x17\xFF\xFF\xFFmoredata").unwrap().1)
+                    .unwrap(),
                 16777215i32,
             );
         }
@@ -3085,15 +3057,15 @@ pub(self) mod parser {
         #[test]
         fn test_pos_int_4() {
             assert_eq!(
-                pos_int_4(&b"\x18\x01\x00\x00\x00moredata"[..]),
+                pos_int_4(b"\x18\x01\x00\x00\x00moredata"),
                 Ok((&b"moredata"[..], TupleValue::PosInt4(16777216)))
             );
             assert_eq!(
-                pos_int_4(&b"\x18\xFF\xFF\xFF\xFFmoredata"[..]),
+                pos_int_4(b"\x18\xFF\xFF\xFF\xFFmoredata"),
                 Ok((&b"moredata"[..], TupleValue::PosInt4(4294967295)))
             );
             assert_eq!(
-                pos_int_4(&b"no_pos_int_4"[..]),
+                pos_int_4(b"no_pos_int_4"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_pos_int_4"[..],
                     ErrorKind::Tag
@@ -3101,14 +3073,14 @@ pub(self) mod parser {
             );
             assert_eq!(
                 tuple_extractor::pos_int_4_i32(
-                    pos_int_4(&b"\x18\x7F\xFF\xFF\xFFmoredata"[..]).unwrap().1
+                    pos_int_4(b"\x18\x7F\xFF\xFF\xFFmoredata").unwrap().1
                 )
                 .unwrap(),
                 2147483647i32
             );
             assert_eq!(
                 tuple_extractor::pos_int_4_i64(
-                    pos_int_4(&b"\x18\x80\x00\x00\x00moredata"[..]).unwrap().1
+                    pos_int_4(b"\x18\x80\x00\x00\x00moredata").unwrap().1
                 )
                 .unwrap(),
                 2147483648i64
@@ -3118,15 +3090,15 @@ pub(self) mod parser {
         #[test]
         fn test_pos_int_5() {
             assert_eq!(
-                pos_int_5(&b"\x19\x01\x00\x00\x00\x00moredata"[..]),
+                pos_int_5(b"\x19\x01\x00\x00\x00\x00moredata"),
                 Ok((&b"moredata"[..], TupleValue::PosInt5(4294967296)))
             );
             assert_eq!(
-                pos_int_5(&b"\x19\xFF\xFF\xFF\xFF\xFFmoredata"[..]),
+                pos_int_5(b"\x19\xFF\xFF\xFF\xFF\xFFmoredata"),
                 Ok((&b"moredata"[..], TupleValue::PosInt5(1099511627775)))
             );
             assert_eq!(
-                pos_int_5(&b"no_pos_int_5"[..]),
+                pos_int_5(b"no_pos_int_5"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_pos_int_5"[..],
                     ErrorKind::Tag
@@ -3134,18 +3106,14 @@ pub(self) mod parser {
             );
             assert_eq!(
                 tuple_extractor::pos_int_5_i64(
-                    pos_int_5(&b"\x19\x01\x00\x00\x00\x00moredata"[..])
-                        .unwrap()
-                        .1
+                    pos_int_5(b"\x19\x01\x00\x00\x00\x00moredata").unwrap().1
                 )
                 .unwrap(),
                 4294967296i64
             );
             assert_eq!(
                 tuple_extractor::pos_int_5_i64(
-                    pos_int_5(&b"\x19\xFF\xFF\xFF\xFF\xFFmoredata"[..])
-                        .unwrap()
-                        .1
+                    pos_int_5(b"\x19\xFF\xFF\xFF\xFF\xFFmoredata").unwrap().1
                 )
                 .unwrap(),
                 1099511627775i64
@@ -3155,15 +3123,15 @@ pub(self) mod parser {
         #[test]
         fn test_pos_int_6() {
             assert_eq!(
-                pos_int_6(&b"\x1A\x01\x00\x00\x00\x00\x00moredata"[..]),
+                pos_int_6(b"\x1A\x01\x00\x00\x00\x00\x00moredata"),
                 Ok((&b"moredata"[..], TupleValue::PosInt6(1099511627776)))
             );
             assert_eq!(
-                pos_int_6(&b"\x1A\xFF\xFF\xFF\xFF\xFF\xFFmoredata"[..]),
+                pos_int_6(b"\x1A\xFF\xFF\xFF\xFF\xFF\xFFmoredata"),
                 Ok((&b"moredata"[..], TupleValue::PosInt6(281474976710655)))
             );
             assert_eq!(
-                pos_int_6(&b"no_pos_int_6"[..]),
+                pos_int_6(b"no_pos_int_6"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_pos_int_6"[..],
                     ErrorKind::Tag
@@ -3171,7 +3139,7 @@ pub(self) mod parser {
             );
             assert_eq!(
                 tuple_extractor::pos_int_6_i64(
-                    pos_int_6(&b"\x1A\x01\x00\x00\x00\x00\x00moredata"[..])
+                    pos_int_6(b"\x1A\x01\x00\x00\x00\x00\x00moredata")
                         .unwrap()
                         .1
                 )
@@ -3180,7 +3148,7 @@ pub(self) mod parser {
             );
             assert_eq!(
                 tuple_extractor::pos_int_6_i64(
-                    pos_int_6(&b"\x1A\xFF\xFF\xFF\xFF\xFF\xFFmoredata"[..])
+                    pos_int_6(b"\x1A\xFF\xFF\xFF\xFF\xFF\xFFmoredata")
                         .unwrap()
                         .1
                 )
@@ -3192,15 +3160,15 @@ pub(self) mod parser {
         #[test]
         fn test_pos_int_7() {
             assert_eq!(
-                pos_int_7(&b"\x1B\x01\x00\x00\x00\x00\x00\x00moredata"[..]),
+                pos_int_7(b"\x1B\x01\x00\x00\x00\x00\x00\x00moredata"),
                 Ok((&b"moredata"[..], TupleValue::PosInt7(281474976710656)))
             );
             assert_eq!(
-                pos_int_7(&b"\x1B\xFF\xFF\xFF\xFF\xFF\xFF\xFFmoredata"[..]),
+                pos_int_7(b"\x1B\xFF\xFF\xFF\xFF\xFF\xFF\xFFmoredata"),
                 Ok((&b"moredata"[..], TupleValue::PosInt7(72057594037927935)))
             );
             assert_eq!(
-                pos_int_7(&b"no_pos_int_7"[..]),
+                pos_int_7(b"no_pos_int_7"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_pos_int_7"[..],
                     ErrorKind::Tag
@@ -3208,7 +3176,7 @@ pub(self) mod parser {
             );
             assert_eq!(
                 tuple_extractor::pos_int_7_i64(
-                    pos_int_7(&b"\x1B\x01\x00\x00\x00\x00\x00\x00moredata"[..])
+                    pos_int_7(b"\x1B\x01\x00\x00\x00\x00\x00\x00moredata")
                         .unwrap()
                         .1
                 )
@@ -3217,7 +3185,7 @@ pub(self) mod parser {
             );
             assert_eq!(
                 tuple_extractor::pos_int_7_i64(
-                    pos_int_7(&b"\x1B\xFF\xFF\xFF\xFF\xFF\xFF\xFFmoredata"[..])
+                    pos_int_7(b"\x1B\xFF\xFF\xFF\xFF\xFF\xFF\xFFmoredata")
                         .unwrap()
                         .1
                 )
@@ -3229,15 +3197,15 @@ pub(self) mod parser {
         #[test]
         fn test_pos_int_8() {
             assert_eq!(
-                pos_int_8(&b"\x1C\x01\x00\x00\x00\x00\x00\x00\x00moredata"[..]),
+                pos_int_8(b"\x1C\x01\x00\x00\x00\x00\x00\x00\x00moredata"),
                 Ok((&b"moredata"[..], TupleValue::PosInt8(72057594037927936)))
             );
             assert_eq!(
-                pos_int_8(&b"\x1C\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFFmoredata"[..]),
+                pos_int_8(b"\x1C\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFFmoredata"),
                 Ok((&b"moredata"[..], TupleValue::PosInt8(18446744073709551615)))
             );
             assert_eq!(
-                pos_int_8(&b"no_pos_int_8"[..]),
+                pos_int_8(b"no_pos_int_8"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_pos_int_8"[..],
                     ErrorKind::Tag
@@ -3245,7 +3213,7 @@ pub(self) mod parser {
             );
             assert_eq!(
                 tuple_extractor::pos_int_8_i64(
-                    pos_int_8(&b"\x1C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFFmoredata"[..])
+                    pos_int_8(b"\x1C\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFFmoredata")
                         .unwrap()
                         .1
                 )
@@ -3254,7 +3222,7 @@ pub(self) mod parser {
             );
             assert_eq!(
                 tuple_extractor::pos_int_8_bigint(
-                    pos_int_8(&b"\x1C\x80\x00\x00\x00\x00\x00\x00\x00moredata"[..])
+                    pos_int_8(b"\x1C\x80\x00\x00\x00\x00\x00\x00\x00moredata")
                         .unwrap()
                         .1
                 )
@@ -3267,7 +3235,7 @@ pub(self) mod parser {
         fn test_positive_arbitrary_precision_integer() {
             assert_eq!(
                 positive_arbitrary_precision_integer(
-                    &b"\x1D\x09\x01\x00\x00\x00\x00\x00\x00\x00\x00moredata"[..]
+                    b"\x1D\x09\x01\x00\x00\x00\x00\x00\x00\x00\x00moredata"
                 ),
                 Ok((
                     &b"moredata"[..],
@@ -3277,18 +3245,14 @@ pub(self) mod parser {
                 ))
             );
             assert_eq!(
-                positive_arbitrary_precision_integer(
-                    &b"no_positive_arbitrary_precision_integer"[..]
-                ),
+                positive_arbitrary_precision_integer(b"no_positive_arbitrary_precision_integer"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_positive_arbitrary_precision_integer"[..],
                     ErrorKind::Tag
                 )))
             );
             assert_eq!(
-                positive_arbitrary_precision_integer(
-                    &b"\x1D\x09\x01\x00\x00\x00\x00\x00\x00\x00"[..]
-                ),
+                positive_arbitrary_precision_integer(b"\x1D\x09\x01\x00\x00\x00\x00\x00\x00\x00"),
                 Err(nom::Err::Incomplete(nom::Needed::Size(
                     NonZeroUsize::new(1).unwrap()
                 )))
@@ -3296,7 +3260,7 @@ pub(self) mod parser {
             assert_eq!(
                 tuple_extractor::positive_arbitrary_precision_integer(
                     positive_arbitrary_precision_integer(
-                        &b"\x1D\x09\x01\x00\x00\x00\x00\x00\x00\x00\x00moredata"[..]
+                        b"\x1D\x09\x01\x00\x00\x00\x00\x00\x00\x00\x00moredata"
                     )
                     .unwrap()
                     .1
@@ -3311,42 +3275,42 @@ pub(self) mod parser {
         #[test]
         fn test_ieee_binary_floating_point_float() {
             assert_eq!(
-                ieee_binary_floating_point_float(&b"\x20\xC0\x48\xF5\xC3moredata"[..]),
+                ieee_binary_floating_point_float(b"\x20\xC0\x48\xF5\xC3moredata"),
                 Ok((
                     &b"moredata"[..],
                     TupleValue::IeeeBinaryFloatingPointFloat(3.14f32)
                 ))
             );
             assert_eq!(
-                ieee_binary_floating_point_float(&b"\x20\x3F\xB7\x0A\x3Cmoredata"[..]),
+                ieee_binary_floating_point_float(b"\x20\x3F\xB7\x0A\x3Cmoredata"),
                 Ok((
                     &b"moredata"[..],
                     TupleValue::IeeeBinaryFloatingPointFloat(-3.14f32)
                 ))
             );
             assert_eq!(
-                ieee_binary_floating_point_float(&b"\x20\x80\x00\x00\x00moredata"[..]),
+                ieee_binary_floating_point_float(b"\x20\x80\x00\x00\x00moredata"),
                 Ok((
                     &b"moredata"[..],
                     TupleValue::IeeeBinaryFloatingPointFloat(0.0f32)
                 ))
             );
             assert_eq!(
-                ieee_binary_floating_point_float(&b"\x20\x7F\xFF\xFF\xFFmoredata"[..]),
+                ieee_binary_floating_point_float(b"\x20\x7F\xFF\xFF\xFFmoredata"),
                 Ok((
                     &b"moredata"[..],
                     TupleValue::IeeeBinaryFloatingPointFloat(-0.0f32)
                 ))
             );
             assert_eq!(
-                ieee_binary_floating_point_float(&b"\x20\xFF\x80\x00\x00moredata"[..]),
+                ieee_binary_floating_point_float(b"\x20\xFF\x80\x00\x00moredata"),
                 Ok((
                     &b"moredata"[..],
                     TupleValue::IeeeBinaryFloatingPointFloat(f32::INFINITY)
                 ))
             );
             assert_eq!(
-                ieee_binary_floating_point_float(&b"\x20\x00\x7F\xFF\xFFmoredata"[..]),
+                ieee_binary_floating_point_float(b"\x20\x00\x7F\xFF\xFFmoredata"),
                 Ok((
                     &b"moredata"[..],
                     TupleValue::IeeeBinaryFloatingPointFloat(f32::NEG_INFINITY)
@@ -3357,14 +3321,14 @@ pub(self) mod parser {
             // results in f32::NAN, but they cannot be compared.
 
             assert_eq!(
-                ieee_binary_floating_point_float(&b"no_ieee_binary_floating_point_float"[..]),
+                ieee_binary_floating_point_float(b"no_ieee_binary_floating_point_float"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_ieee_binary_floating_point_float"[..],
                     ErrorKind::Tag
                 )))
             );
             assert_eq!(
-                ieee_binary_floating_point_float(&b"\x20\xC0\x48\xF5"[..]),
+                ieee_binary_floating_point_float(b"\x20\xC0\x48\xF5"),
                 Err(nom::Err::Error(nom::error::Error::new(
                     &b"\xC0\x48\xF5"[..],
                     nom::error::ErrorKind::Eof
@@ -3373,7 +3337,7 @@ pub(self) mod parser {
 
             assert_eq!(
                 tuple_extractor::ieee_binary_floating_point_float(
-                    ieee_binary_floating_point_float(&b"\x20\xC0\x48\xF5\xC3moredata"[..])
+                    ieee_binary_floating_point_float(b"\x20\xC0\x48\xF5\xC3moredata")
                         .unwrap()
                         .1
                 )
@@ -3387,54 +3351,42 @@ pub(self) mod parser {
         #[test]
         fn test_ieee_binary_floating_point_double() {
             assert_eq!(
-                ieee_binary_floating_point_double(
-                    &b"\x21\xC0\x09\x1E\xB8\x51\xEB\x85\x1Fmoredata"[..]
-                ),
+                ieee_binary_floating_point_double(b"\x21\xC0\x09\x1E\xB8\x51\xEB\x85\x1Fmoredata"),
                 Ok((
                     &b"moredata"[..],
                     TupleValue::IeeeBinaryFloatingPointDouble(3.14f64)
                 ))
             );
             assert_eq!(
-                ieee_binary_floating_point_double(
-                    &b"\x21\x3F\xF6\xE1\x47\xAE\x14\x7A\xE0moredata"[..]
-                ),
+                ieee_binary_floating_point_double(b"\x21\x3F\xF6\xE1\x47\xAE\x14\x7A\xE0moredata"),
                 Ok((
                     &b"moredata"[..],
                     TupleValue::IeeeBinaryFloatingPointDouble(-3.14f64)
                 ))
             );
             assert_eq!(
-                ieee_binary_floating_point_double(
-                    &b"\x21\x80\x00\x00\x00\x00\x00\x00\x00moredata"[..]
-                ),
+                ieee_binary_floating_point_double(b"\x21\x80\x00\x00\x00\x00\x00\x00\x00moredata"),
                 Ok((
                     &b"moredata"[..],
                     TupleValue::IeeeBinaryFloatingPointDouble(0.0f64)
                 ))
             );
             assert_eq!(
-                ieee_binary_floating_point_double(
-                    &b"\x21\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFFmoredata"[..]
-                ),
+                ieee_binary_floating_point_double(b"\x21\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFFmoredata"),
                 Ok((
                     &b"moredata"[..],
                     TupleValue::IeeeBinaryFloatingPointDouble(-0.0f64)
                 ))
             );
             assert_eq!(
-                ieee_binary_floating_point_double(
-                    &b"\x21\xFF\xF0\x00\x00\x00\x00\x00\x00moredata"[..]
-                ),
+                ieee_binary_floating_point_double(b"\x21\xFF\xF0\x00\x00\x00\x00\x00\x00moredata"),
                 Ok((
                     &b"moredata"[..],
                     TupleValue::IeeeBinaryFloatingPointDouble(f64::INFINITY)
                 ))
             );
             assert_eq!(
-                ieee_binary_floating_point_double(
-                    &b"\x21\x00\x0F\xFF\xFF\xFF\xFF\xFF\xFFmoredata"[..]
-                ),
+                ieee_binary_floating_point_double(b"\x21\x00\x0F\xFF\xFF\xFF\xFF\xFF\xFFmoredata"),
                 Ok((
                     &b"moredata"[..],
                     TupleValue::IeeeBinaryFloatingPointDouble(f64::NEG_INFINITY)
@@ -3446,14 +3398,14 @@ pub(self) mod parser {
             // f64::NAN, but they cannot be compared.
 
             assert_eq!(
-                ieee_binary_floating_point_double(&b"no_ieee_binary_floating_point_double"[..]),
+                ieee_binary_floating_point_double(b"no_ieee_binary_floating_point_double"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_ieee_binary_floating_point_double"[..],
                     ErrorKind::Tag
                 )))
             );
             assert_eq!(
-                ieee_binary_floating_point_double(&b"\x21\xC0\x09\x1E\xB8\x51\xEB\x85"[..]),
+                ieee_binary_floating_point_double(b"\x21\xC0\x09\x1E\xB8\x51\xEB\x85"),
                 Err(nom::Err::Error(nom::error::Error::new(
                     &b"\xC0\x09\x1E\xB8\x51\xEB\x85"[..],
                     nom::error::ErrorKind::Eof
@@ -3463,7 +3415,7 @@ pub(self) mod parser {
             assert_eq!(
                 tuple_extractor::ieee_binary_floating_point_double(
                     ieee_binary_floating_point_double(
-                        &b"\x21\xC0\x09\x1E\xB8\x51\xEB\x85\x1Fmoredata"[..]
+                        b"\x21\xC0\x09\x1E\xB8\x51\xEB\x85\x1Fmoredata"
                     )
                     .unwrap()
                     .1
@@ -3476,18 +3428,18 @@ pub(self) mod parser {
         #[test]
         fn test_false_value() {
             assert_eq!(
-                false_value(&b"\x26moredata"[..]),
+                false_value(b"\x26moredata"),
                 Ok((&b"moredata"[..], TupleValue::FalseValue))
             );
             assert_eq!(
-                false_value(&b"no_false_value"[..]),
+                false_value(b"no_false_value"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_false_value"[..],
                     ErrorKind::Tag
                 )))
             );
             assert_eq!(
-                tuple_extractor::false_value(false_value(&b"\x26moredata"[..]).unwrap().1),
+                tuple_extractor::false_value(false_value(b"\x26moredata").unwrap().1),
                 Ok(false)
             );
         }
@@ -3495,18 +3447,18 @@ pub(self) mod parser {
         #[test]
         fn test_true_value() {
             assert_eq!(
-                true_value(&b"\x27moredata"[..]),
+                true_value(b"\x27moredata"),
                 Ok((&b"moredata"[..], TupleValue::TrueValue))
             );
             assert_eq!(
-                true_value(&b"no_true_value"[..]),
+                true_value(b"no_true_value"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_true_value"[..],
                     ErrorKind::Tag
                 )))
             );
             assert_eq!(
-                tuple_extractor::true_value(true_value(&b"\x27moredata"[..]).unwrap().1),
+                tuple_extractor::true_value(true_value(b"\x27moredata").unwrap().1),
                 Ok(true)
             );
         }
@@ -3514,22 +3466,25 @@ pub(self) mod parser {
         #[test]
         fn test_rfc_4122_uuid() {
             assert_eq!(
-        	     rfc_4122_uuid(
-        		 &b"\x30\xFF\xFF\xFF\xFF\xBA\x5E\xBA\x11\x00\x00\x00\x00\x5C\xA1\xAB\x1Emoredata"[..]
-        	     ),
-        	Ok((&b"moredata"[..], TupleValue::Rfc4122Uuid(Uuid::parse_str("ffffffff-ba5e-ba11-0000-00005ca1ab1e").unwrap())))
+                rfc_4122_uuid(
+                    b"\x30\xFF\xFF\xFF\xFF\xBA\x5E\xBA\x11\x00\x00\x00\x00\x5C\xA1\xAB\x1Emoredata"
+                ),
+                Ok((
+                    &b"moredata"[..],
+                    TupleValue::Rfc4122Uuid(
+                        Uuid::parse_str("ffffffff-ba5e-ba11-0000-00005ca1ab1e").unwrap()
+                    )
+                ))
             );
             assert_eq!(
-                rfc_4122_uuid(&b"no_rfc_4122_uuid"[..]),
+                rfc_4122_uuid(b"no_rfc_4122_uuid"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_rfc_4122_uuid"[..],
                     ErrorKind::Tag
                 )))
             );
             assert_eq!(
-                rfc_4122_uuid(
-                    &b"\x30\xFF\xFF\xFF\xFF\xBA\x5E\xBA\x11\x00\x00\x00\x00\x5C\xA1\xAB"[..]
-                ),
+                rfc_4122_uuid(b"\x30\xFF\xFF\xFF\xFF\xBA\x5E\xBA\x11\x00\x00\x00\x00\x5C\xA1\xAB"),
                 Err(nom::Err::Error(nom::error::Error::new(
                     &b"\xFF\xFF\xFF\xFF\xBA\x5E\xBA\x11\x00\x00\x00\x00\x5C\xA1\xAB"[..],
                     nom::error::ErrorKind::Eof
@@ -3539,7 +3494,7 @@ pub(self) mod parser {
             assert_eq!(
         	tuple_extractor::rfc_4122_uuid(
         	    rfc_4122_uuid(
-        		&b"\x30\xFF\xFF\xFF\xFF\xBA\x5E\xBA\x11\x00\x00\x00\x00\x5C\xA1\xAB\x1Emoredata"[..]).unwrap().1
+        		b"\x30\xFF\xFF\xFF\xFF\xBA\x5E\xBA\x11\x00\x00\x00\x00\x5C\xA1\xAB\x1Emoredata").unwrap().1
         	).unwrap(),
         	Uuid::parse_str("ffffffff-ba5e-ba11-0000-00005ca1ab1e").unwrap()
             );
@@ -3549,7 +3504,7 @@ pub(self) mod parser {
         fn test_versionstamp_96_bit() {
             assert_eq!(
                 versionstamp_96_bit(
-                    &b"\x33\xAA\xBB\xCC\xDD\xEE\xFF\x00\x01\x02\x03\x00\x00moredata"[..]
+                    b"\x33\xAA\xBB\xCC\xDD\xEE\xFF\x00\x01\x02\x03\x00\x00moredata"
                 ),
                 Ok((
                     &b"moredata"[..],
@@ -3561,7 +3516,7 @@ pub(self) mod parser {
             );
             assert_eq!(
                 versionstamp_96_bit(
-                    &b"\x33\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x02\x91moredata"[..]
+                    b"\x33\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x02\x91moredata"
                 ),
                 Ok((
                     &b"moredata"[..],
@@ -3573,7 +3528,7 @@ pub(self) mod parser {
             );
             assert_eq!(
                 versionstamp_96_bit(
-                    &b"\x33\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x02\x91moredata"[..]
+                    b"\x33\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x02\x91moredata"
                 ),
                 Ok((
                     &b"moredata"[..],
@@ -3581,7 +3536,7 @@ pub(self) mod parser {
                 ))
             );
             assert_eq!(
-                versionstamp_96_bit(&b"no_versionstamp_96_bit"[..]),
+                versionstamp_96_bit(b"no_versionstamp_96_bit"),
                 Err(nom::Err::Error(Error::new(
                     &b"no_versionstamp_96_bit"[..],
                     ErrorKind::Tag
@@ -3591,14 +3546,14 @@ pub(self) mod parser {
             assert_eq!(
                 tuple_extractor::versionstamp_96_bit(
                     versionstamp_96_bit(
-                        &b"\x33\xAA\xBB\xCC\xDD\xEE\xFF\x00\x01\x02\x03\x00\x00moredata"[..]
+                        b"\x33\xAA\xBB\xCC\xDD\xEE\xFF\x00\x01\x02\x03\x00\x00moredata"
                     )
                     .unwrap()
                     .1
                 )
                 .unwrap(),
                 Versionstamp::complete(
-                    Bytes::from_static(&b"\xAA\xBB\xCC\xDD\xEE\xFF\x00\x01\x02\x03"[..]),
+                    Bytes::from_static(b"\xAA\xBB\xCC\xDD\xEE\xFF\x00\x01\x02\x03"),
                     0
                 )
             );

@@ -4,7 +4,7 @@ use dashmap::DashMap;
 
 use fdb::database::{DatabaseOption, FdbDatabase};
 use fdb::error::{
-    FdbError, FdbResult, TUPLE_PACK_WITH_VERSIONSTAMP_MULTIPLE_FOUND,
+    FdbError, FdbResult, TUPLE_GET, TUPLE_PACK_WITH_VERSIONSTAMP_MULTIPLE_FOUND,
     TUPLE_PACK_WITH_VERSIONSTAMP_NOT_FOUND,
 };
 use fdb::future::{FdbFutureKey, FdbFutureUnit};
@@ -15,7 +15,7 @@ use fdb::transaction::{
     FdbReadTransaction, FdbTransaction, MutationType, ReadTransaction, Transaction,
     TransactionOption,
 };
-use fdb::tuple::{key_util, Tuple, Versionstamp};
+use fdb::tuple::{key_util, Null, Tuple, Versionstamp};
 use fdb::{KeySelector, KeyValue};
 
 // This code is automatically generated, so we can ignore the
@@ -265,7 +265,7 @@ impl StackMachine {
                 let mut range_stream = {
                     let mut tup = Tuple::new();
 
-                    tup.add_bytes(ops_tup.0);
+                    tup.push_back::<Bytes>(ops_tup.0);
 
                     tup
                 }
@@ -292,9 +292,8 @@ impl StackMachine {
         );
 
         for (inst_number, kv) in kvs.into_iter().enumerate() {
-            let inst = Tuple::from_bytes(kv.into_value()).unwrap_or_else(|err| {
-                panic!("Error occurred during `Tuple::from_bytes`: {:?}", err)
-            });
+            let inst = Tuple::try_from(kv.into_value())
+                .unwrap_or_else(|err| panic!("Error occurred during `Tuple::try_from`: {:?}", err));
             sm.process_inst(inst_number, inst).await;
         }
     }
@@ -306,27 +305,52 @@ impl StackMachine {
     //
     // [1]: https://github.com/apple/foundationdb/blob/6.3.22/bindings/bindingtester/spec/bindingApiTester.md#overview
     fn get_additional_inst_data(inst: &Tuple) -> StackEntryItem {
-        inst.get_bigint(1)
+        inst.get::<BigInt>(1)
+            .ok_or(FdbError::new(TUPLE_GET))
             .map(StackEntryItem::BigInt)
-            .or_else(|_| inst.get_bool(1).map(StackEntryItem::Bool))
             .or_else(|_| {
-                inst.get_bytes_ref(1)
+                inst.get::<bool>(1)
+                    .ok_or(FdbError::new(TUPLE_GET))
+                    .map(StackEntryItem::Bool)
+            })
+            .or_else(|_| {
+                inst.get::<&Bytes>(1)
+                    .ok_or(FdbError::new(TUPLE_GET))
                     .map(|b| StackEntryItem::Bytes(b.clone()))
             })
-            .or_else(|_| inst.get_f32(1).map(StackEntryItem::Float))
-            .or_else(|_| inst.get_f64(1).map(StackEntryItem::Double))
-            .or_else(|_| inst.get_null(1).map(|_| StackEntryItem::Null))
             .or_else(|_| {
-                inst.get_string_ref(1)
+                inst.get::<f32>(1)
+                    .ok_or(FdbError::new(TUPLE_GET))
+                    .map(StackEntryItem::Float)
+            })
+            .or_else(|_| {
+                inst.get::<f64>(1)
+                    .ok_or(FdbError::new(TUPLE_GET))
+                    .map(StackEntryItem::Double)
+            })
+            .or_else(|_| {
+                inst.get::<Null>(1)
+                    .ok_or(FdbError::new(TUPLE_GET))
+                    .map(|_| StackEntryItem::Null)
+            })
+            .or_else(|_| {
+                inst.get::<&String>(1)
+                    .ok_or(FdbError::new(TUPLE_GET))
                     .map(|s| StackEntryItem::String(s.clone()))
             })
             .or_else(|_| {
-                inst.get_tuple_ref(1)
+                inst.get::<&Tuple>(1)
+                    .ok_or(FdbError::new(TUPLE_GET))
                     .map(|t| StackEntryItem::Tuple(t.clone()))
             })
-            .or_else(|_| inst.get_uuid_ref(1).map(|u| StackEntryItem::Uuid(*u)))
             .or_else(|_| {
-                inst.get_versionstamp_ref(1)
+                inst.get::<&Uuid>(1)
+                    .ok_or(FdbError::new(TUPLE_GET))
+                    .map(|u| StackEntryItem::Uuid(*u))
+            })
+            .or_else(|_| {
+                inst.get::<&Versionstamp>(1)
+                    .ok_or(FdbError::new(TUPLE_GET))
                     .map(|v| StackEntryItem::Versionstamp(v.clone()))
             })
             .unwrap_or_else(|err| {
@@ -392,8 +416,9 @@ impl StackMachine {
 
     async fn process_inst(&mut self, inst_number: usize, inst: Tuple) {
         let mut op = inst
-            .get_string_ref(0)
-            .unwrap_or_else(|err| panic!("Error occurred during `inst.get_string_ref`: {:?}", err))
+            .get::<&String>(0)
+            .ok_or(FdbError::new(TUPLE_GET))
+            .unwrap_or_else(|err| panic!("Error occurred during `inst.get::<&String>`: {:?}", err))
             .clone();
 
         let verbose_inst_range = VERBOSE_INST_RANGE
@@ -945,16 +970,16 @@ impl StackMachine {
                         // `add_bigint` code internally uses
                         // `add_i64`, `add_i32`, `add_i16, `add_i8`.
                         match self.pop().await.item {
-                            NonFutureStackEntryItem::BigInt(bi) => res.add_bigint(bi),
-                            NonFutureStackEntryItem::Bool(b) => res.add_bool(b),
-                            NonFutureStackEntryItem::Bytes(b) => res.add_bytes(b),
-                            NonFutureStackEntryItem::Float(f) => res.add_f32(f),
-                            NonFutureStackEntryItem::Double(d) => res.add_f64(d),
-                            NonFutureStackEntryItem::Null => res.add_null(),
-                            NonFutureStackEntryItem::String(s) => res.add_string(s),
-                            NonFutureStackEntryItem::Tuple(t) => res.add_tuple(t),
-                            NonFutureStackEntryItem::Uuid(u) => res.add_uuid(u),
-                            NonFutureStackEntryItem::Versionstamp(v) => res.add_versionstamp(v),
+                            NonFutureStackEntryItem::BigInt(bi) => res.push_back::<BigInt>(bi),
+                            NonFutureStackEntryItem::Bool(b) => res.push_back::<bool>(b),
+                            NonFutureStackEntryItem::Bytes(b) => res.push_back::<Bytes>(b),
+                            NonFutureStackEntryItem::Float(f) => res.push_back::<f32>(f),
+                            NonFutureStackEntryItem::Double(d) => res.push_back::<f64>(d),
+                            NonFutureStackEntryItem::Null => res.push_back::<Null>(Null),
+                            NonFutureStackEntryItem::String(s) => res.push_back::<String>(s),
+                            NonFutureStackEntryItem::Tuple(t) => res.push_back::<Tuple>(t),
+                            NonFutureStackEntryItem::Uuid(u) => res.push_back::<Uuid>(u),
+                            NonFutureStackEntryItem::Versionstamp(v) => res.push_back::<Versionstamp>(v),
                         }
                     }
 
@@ -984,16 +1009,16 @@ impl StackMachine {
                         // `add_bigint` code internally uses
                         // `add_i64`, `add_i32`, `add_i16, `add_i8`.
                         match self.pop().await.item {
-                            NonFutureStackEntryItem::BigInt(bi) => res.add_bigint(bi),
-                            NonFutureStackEntryItem::Bool(b) => res.add_bool(b),
-                            NonFutureStackEntryItem::Bytes(b) => res.add_bytes(b),
-                            NonFutureStackEntryItem::Float(f) => res.add_f32(f),
-                            NonFutureStackEntryItem::Double(d) => res.add_f64(d),
-                            NonFutureStackEntryItem::Null => res.add_null(),
-                            NonFutureStackEntryItem::String(s) => res.add_string(s),
-                            NonFutureStackEntryItem::Tuple(t) => res.add_tuple(t),
-                            NonFutureStackEntryItem::Uuid(u) => res.add_uuid(u),
-                            NonFutureStackEntryItem::Versionstamp(v) => res.add_versionstamp(v),
+                            NonFutureStackEntryItem::BigInt(bi) => res.push_back::<BigInt>(bi),
+                            NonFutureStackEntryItem::Bool(b) => res.push_back::<bool>(b),
+                            NonFutureStackEntryItem::Bytes(b) => res.push_back::<Bytes>(b),
+                            NonFutureStackEntryItem::Float(f) => res.push_back::<f32>(f),
+                            NonFutureStackEntryItem::Double(d) => res.push_back::<f64>(d),
+                            NonFutureStackEntryItem::Null => res.push_back::<Null>(Null),
+                            NonFutureStackEntryItem::String(s) => res.push_back::<String>(s),
+                            NonFutureStackEntryItem::Tuple(t) => res.push_back::<Tuple>(t),
+                            NonFutureStackEntryItem::Uuid(u) => res.push_back::<Uuid>(u),
+                            NonFutureStackEntryItem::Versionstamp(v) => res.push_back::<Versionstamp>(v),
                         }
                     }
 
@@ -1020,7 +1045,7 @@ impl StackMachine {
                     }
                 }
                 "TUPLE_UNPACK" => {
-                    let packed_tuple = Tuple::from_bytes(
+                    let packed_tuple = Tuple::try_from(
                         if let NonFutureStackEntryItem::Bytes(b) = self.pop().await.item {
                             b
                         } else {
@@ -1035,36 +1060,42 @@ impl StackMachine {
                         let mut res = Tuple::new();
 
                         packed_tuple
-                            .get_bigint(ti)
-                            .map(|bi| res.add_bigint(bi))
-                            .or_else(|_| packed_tuple.get_bool(ti).map(|b| res.add_bool(b)))
+                            .get::<BigInt>(ti)
+			    .ok_or(FdbError::new(TUPLE_GET))
+                            .map(|bi| res.push_back::<BigInt>(bi))
+                            .or_else(|_| packed_tuple.get::<bool>(ti).ok_or(FdbError::new(TUPLE_GET)).map(|b| res.push_back::<bool>(b)))
                             .or_else(|_| {
                                 packed_tuple
-                                    .get_bytes_ref(ti)
-                                    .map(|b| res.add_bytes(b.clone()))
+                                    .get::<&Bytes>(ti)
+				    .ok_or(FdbError::new(TUPLE_GET))
+                                    .map(|b| res.push_back::<Bytes>(b.clone()))
                             })
-                            .or_else(|_| packed_tuple.get_f32(ti).map(|f| res.add_f32(f)))
-                            .or_else(|_| packed_tuple.get_f64(ti).map(|d| res.add_f64(d)))
-                            .or_else(|_| packed_tuple.get_null(ti).map(|_| res.add_null()))
+                            .or_else(|_| packed_tuple.get::<f32>(ti).ok_or(FdbError::new(TUPLE_GET)).map(|f| res.push_back::<f32>(f)))
+                            .or_else(|_| packed_tuple.get::<f64>(ti).ok_or(FdbError::new(TUPLE_GET)).map(|d| res.push_back::<f64>(d)))
+                            .or_else(|_| packed_tuple.get::<Null>(ti).ok_or(FdbError::new(TUPLE_GET)).map(|_| res.push_back::<Null>(Null)))
                             .or_else(|_| {
                                 packed_tuple
-                                    .get_string_ref(ti)
-                                    .map(|s| res.add_string(s.clone()))
-                            })
-                            .or_else(|_| {
-                                packed_tuple
-                                    .get_tuple_ref(ti)
-                                    .map(|tup_ref| res.add_tuple(tup_ref.clone()))
+                                    .get::<&String>(ti)
+				    .ok_or(FdbError::new(TUPLE_GET))
+                                    .map(|s| res.push_back::<String>(s.clone()))
                             })
                             .or_else(|_| {
                                 packed_tuple
-                                    .get_uuid_ref(ti)
-                                    .map(|u| res.add_uuid(*u))
+                                    .get::<&Tuple>(ti)
+				    .ok_or(FdbError::new(TUPLE_GET))
+                                    .map(|tup_ref| res.push_back::<Tuple>(tup_ref.clone()))
                             })
                             .or_else(|_| {
                                 packed_tuple
-                                    .get_versionstamp_ref(ti)
-                                    .map(|vs| res.add_versionstamp(vs.clone()))
+                                    .get::<&Uuid>(ti)
+				    .ok_or(FdbError::new(TUPLE_GET))
+                                    .map(|u| res.push_back::<Uuid>(*u))
+                            })
+                            .or_else(|_| {
+                                packed_tuple
+                                    .get::<&Versionstamp>(ti)
+				    .ok_or(FdbError::new(TUPLE_GET))
+                                    .map(|vs| res.push_back::<Versionstamp>(vs.clone()))
                             })
                             .unwrap_or_else(|_| {
                                 panic!("Unable to unpack packed_tuple: {:?}", packed_tuple);
@@ -1091,16 +1122,16 @@ impl StackMachine {
                         // `add_bigint` code internally uses
                         // `add_i64`, `add_i32`, `add_i16, `add_i8`.
                         match self.pop().await.item {
-                            NonFutureStackEntryItem::BigInt(bi) => res_tup.add_bigint(bi),
-                            NonFutureStackEntryItem::Bool(b) => res_tup.add_bool(b),
-                            NonFutureStackEntryItem::Bytes(b) => res_tup.add_bytes(b),
-                            NonFutureStackEntryItem::Float(f) => res_tup.add_f32(f),
-                            NonFutureStackEntryItem::Double(d) => res_tup.add_f64(d),
-                            NonFutureStackEntryItem::Null => res_tup.add_null(),
-                            NonFutureStackEntryItem::String(s) => res_tup.add_string(s),
-                            NonFutureStackEntryItem::Tuple(t) => res_tup.add_tuple(t),
-                            NonFutureStackEntryItem::Uuid(u) => res_tup.add_uuid(u),
-                            NonFutureStackEntryItem::Versionstamp(v) => res_tup.add_versionstamp(v),
+                            NonFutureStackEntryItem::BigInt(bi) => res_tup.push_back::<BigInt>(bi),
+                            NonFutureStackEntryItem::Bool(b) => res_tup.push_back::<bool>(b),
+                            NonFutureStackEntryItem::Bytes(b) => res_tup.push_back::<Bytes>(b),
+                            NonFutureStackEntryItem::Float(f) => res_tup.push_back::<f32>(f),
+                            NonFutureStackEntryItem::Double(d) => res_tup.push_back::<f64>(d),
+                            NonFutureStackEntryItem::Null => res_tup.push_back::<Null>(Null),
+                            NonFutureStackEntryItem::String(s) => res_tup.push_back::<String>(s),
+                            NonFutureStackEntryItem::Tuple(t) => res_tup.push_back::<Tuple>(t),
+                            NonFutureStackEntryItem::Uuid(u) => res_tup.push_back::<Uuid>(u),
+                            NonFutureStackEntryItem::Versionstamp(v) => res_tup.push_back::<Versionstamp>(v),
                         }
                     }
 
@@ -1131,7 +1162,7 @@ impl StackMachine {
 
                     for _ in 0..count {
                         unsorted_tuples.push(
-                            Tuple::from_bytes(
+                            Tuple::try_from(
                                 if let NonFutureStackEntryItem::Bytes(b) = self.pop().await.item {
                                     b
                                 } else {
@@ -1141,7 +1172,7 @@ impl StackMachine {
                                 },
                             )
                             .unwrap_or_else(|err| {
-                                panic!("Error occurred during `Tuple::from_bytes`: {:?}", err)
+                                panic!("Error occurred during `Tuple::try_from`: {:?}", err)
                             }),
                         );
                     }
@@ -1647,7 +1678,7 @@ impl StackMachine {
                         Err(err) => self.push_err(inst_number, err),
                     }
                 }
-		"DISABLE_WRITE_CONFLICT" => self.current_transaction().set_option(TransactionOption::NextWriteNoWriteConflictRange)
+		"DISABLE_WRITE_CONFLICT" => unsafe { self.current_transaction().set_option(TransactionOption::NextWriteNoWriteConflictRange) }
 		    .unwrap_or_else(|err| panic!("Error occurred during `set_option(TransactionOption::NextWriteNoWriteConflictRange)`: {:?}", err)),
 		// txn_sizes
 		"GET_APPROXIMATE_SIZE" => match self
@@ -1779,8 +1810,10 @@ impl StackMachine {
     async fn test_locality(&self) {
         self.db
             .run(|tr| async move {
-                tr.set_option(TransactionOption::Timeout(60 * 1000))?;
-                tr.set_option(TransactionOption::ReadSystemKeys)?;
+                unsafe {
+                    tr.set_option(TransactionOption::Timeout(60 * 1000))?;
+                    tr.set_option(TransactionOption::ReadSystemKeys)?;
+                }
 
                 let boundary_keys = self
                     .db
@@ -1927,25 +1960,27 @@ impl StackMachine {
     async fn test_tr_options(&self) {
         self.db
             .run(|tr| async move {
-                tr.set_option(TransactionOption::PrioritySystemImmediate)?;
-                tr.set_option(TransactionOption::PriorityBatch)?;
-                tr.set_option(TransactionOption::CausalReadRisky)?;
-                tr.set_option(TransactionOption::CausalWriteRisky)?;
-                tr.set_option(TransactionOption::ReadYourWritesDisable)?;
-                tr.set_option(TransactionOption::ReadSystemKeys)?;
-                tr.set_option(TransactionOption::AccessSystemKeys)?;
-                tr.set_option(TransactionOption::TransactionLoggingMaxFieldLength(1000))?;
-                tr.set_option(TransactionOption::Timeout(60 * 1000))?;
-                tr.set_option(TransactionOption::RetryLimit(50))?;
-                tr.set_option(TransactionOption::MaxRetryDelay(100))?;
-                tr.set_option(TransactionOption::UsedDuringCommitProtectionDisable)?;
-                tr.set_option(TransactionOption::DebugTransactionIdentifier(
-                    "my_transaction".to_string(),
-                ))?;
-                tr.set_option(TransactionOption::LogTransaction)?;
-                tr.set_option(TransactionOption::ReadLockAware)?;
-                tr.set_option(TransactionOption::LockAware)?;
-                tr.set_option(TransactionOption::IncludePortInAddress)?;
+                unsafe {
+                    tr.set_option(TransactionOption::PrioritySystemImmediate)?;
+                    tr.set_option(TransactionOption::PriorityBatch)?;
+                    tr.set_option(TransactionOption::CausalReadRisky)?;
+                    tr.set_option(TransactionOption::CausalWriteRisky)?;
+                    tr.set_option(TransactionOption::ReadYourWritesDisable)?;
+                    tr.set_option(TransactionOption::ReadSystemKeys)?;
+                    tr.set_option(TransactionOption::AccessSystemKeys)?;
+                    tr.set_option(TransactionOption::TransactionLoggingMaxFieldLength(1000))?;
+                    tr.set_option(TransactionOption::Timeout(60 * 1000))?;
+                    tr.set_option(TransactionOption::RetryLimit(50))?;
+                    tr.set_option(TransactionOption::MaxRetryDelay(100))?;
+                    tr.set_option(TransactionOption::UsedDuringCommitProtectionDisable)?;
+                    tr.set_option(TransactionOption::DebugTransactionIdentifier(
+                        "my_transaction".to_string(),
+                    ))?;
+                    tr.set_option(TransactionOption::LogTransaction)?;
+                    tr.set_option(TransactionOption::ReadLockAware)?;
+                    tr.set_option(TransactionOption::LockAware)?;
+                    tr.set_option(TransactionOption::IncludePortInAddress)?;
+                }
 
                 tr.get(Bytes::from_static(b"\xFF")).await?;
 
@@ -2191,13 +2226,13 @@ impl StackMachine {
             match prefix_filter {
                 Some(ref p) => {
                     if key_util::starts_with(key.clone(), p.clone()) {
-                        tup.add_bytes(key.into());
-                        tup.add_bytes(value.into());
+                        tup.push_back::<Bytes>(key.into());
+                        tup.push_back::<Bytes>(value.into());
                     }
                 }
                 None => {
-                    tup.add_bytes(key.into());
-                    tup.add_bytes(value.into());
+                    tup.push_back::<Bytes>(key.into());
+                    tup.push_back::<Bytes>(value.into());
                 }
             }
         }
@@ -2209,8 +2244,8 @@ impl StackMachine {
     fn push_err(&mut self, inst_number: usize, err: FdbError) {
         let item = StackEntryItem::Bytes({
             let mut tup = Tuple::new();
-            tup.add_bytes(Bytes::from_static(b"ERROR"));
-            tup.add_bytes(Bytes::from(format!("{}", err.code())));
+            tup.push_back::<Bytes>(Bytes::from_static(b"ERROR"));
+            tup.push_back::<Bytes>(Bytes::from(format!("{}", err.code())));
             tup.pack()
         });
 
@@ -2230,8 +2265,8 @@ impl StackMachine {
                 .unwrap_or_else(|err| {
                     let item = NonFutureStackEntryItem::Bytes({
                         let mut tup = Tuple::new();
-                        tup.add_bytes(Bytes::from_static(b"ERROR"));
-                        tup.add_bytes(Bytes::from(format!("{}", err.code())));
+                        tup.push_back::<Bytes>(Bytes::from_static(b"ERROR"));
+                        tup.push_back::<Bytes>(Bytes::from(format!("{}", err.code())));
                         tup.pack()
                     });
                     NonFutureStackEntry { item, inst_number }
@@ -2246,8 +2281,8 @@ impl StackMachine {
                 .unwrap_or_else(|err| {
                     let item = NonFutureStackEntryItem::Bytes({
                         let mut tup = Tuple::new();
-                        tup.add_bytes(Bytes::from_static(b"ERROR"));
-                        tup.add_bytes(Bytes::from(format!("{}", err.code())));
+                        tup.push_back::<Bytes>(Bytes::from_static(b"ERROR"));
+                        tup.push_back::<Bytes>(Bytes::from(format!("{}", err.code())));
                         tup.pack()
                     });
                     NonFutureStackEntry { item, inst_number }
@@ -2384,8 +2419,8 @@ impl StackMachine {
                         // will overflow it. Instead use `BigInt` and
                         // let the Tuple layer take care of properly
                         // encoding it.
-                        tup.add_bigint(stack_index.into());
-                        tup.add_bigint(stack_entry.inst_number.into());
+                        tup.push_back::<BigInt>(stack_index.into());
+                        tup.push_back::<BigInt>(stack_entry.inst_number.into());
 
                         Subspace::new(log_prefix_ref.clone()).subspace(&tup).pack()
                     };
@@ -2394,16 +2429,18 @@ impl StackMachine {
                         let mut tup = Tuple::new();
 
                         match stack_entry.item {
-                            NonFutureStackEntryItem::BigInt(b) => tup.add_bigint(b),
-                            NonFutureStackEntryItem::Bool(b) => tup.add_bool(b),
-                            NonFutureStackEntryItem::Bytes(b) => tup.add_bytes(b),
-                            NonFutureStackEntryItem::Float(f) => tup.add_f32(f),
-                            NonFutureStackEntryItem::Double(f) => tup.add_f64(f),
-                            NonFutureStackEntryItem::Null => tup.add_null(),
-                            NonFutureStackEntryItem::String(s) => tup.add_string(s),
-                            NonFutureStackEntryItem::Tuple(tu) => tup.add_tuple(tu),
-                            NonFutureStackEntryItem::Uuid(u) => tup.add_uuid(u),
-                            NonFutureStackEntryItem::Versionstamp(vs) => tup.add_versionstamp(vs),
+                            NonFutureStackEntryItem::BigInt(b) => tup.push_back::<BigInt>(b),
+                            NonFutureStackEntryItem::Bool(b) => tup.push_back::<bool>(b),
+                            NonFutureStackEntryItem::Bytes(b) => tup.push_back::<Bytes>(b),
+                            NonFutureStackEntryItem::Float(f) => tup.push_back::<f32>(f),
+                            NonFutureStackEntryItem::Double(f) => tup.push_back::<f64>(f),
+                            NonFutureStackEntryItem::Null => tup.push_back::<Null>(Null),
+                            NonFutureStackEntryItem::String(s) => tup.push_back::<String>(s),
+                            NonFutureStackEntryItem::Tuple(tu) => tup.push_back::<Tuple>(tu),
+                            NonFutureStackEntryItem::Uuid(u) => tup.push_back::<Uuid>(u),
+                            NonFutureStackEntryItem::Versionstamp(vs) => {
+                                tup.push_back::<Versionstamp>(vs)
+                            }
                         }
 
                         let mut packed_tup = tup.pack();
