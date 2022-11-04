@@ -1484,7 +1484,7 @@ impl Tuple {
         self.has_incomplete_versionstamp
     }
 
-    /// Determine if this [`Tuple`] contains no elements.
+    /// Returns `true` if the [`Tuple`] is empty.
     pub fn is_empty(&self) -> bool {
         self.elements.is_empty()
     }
