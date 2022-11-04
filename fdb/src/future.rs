@@ -228,19 +228,43 @@ where
     }
 }
 
+/// Prevent users from implementing private trait.
+mod private {
+    use std::ffi::CString;
+
+    use crate::range::KeyValueArray;
+    use crate::{Key, Value};
+
+    #[cfg(feature = "fdb-7_1")]
+    use crate::mapped_range::MappedKeyValueArray;
+
+    pub trait Sealed {}
+
+    impl Sealed for () {}
+    impl Sealed for i64 {}
+    impl Sealed for Option<Value> {}
+    impl Sealed for Vec<CString> {}
+    impl Sealed for Vec<Key> {}
+
+    impl Sealed for Key {}
+    impl Sealed for MappedKeyValueArray {}
+    impl Sealed for KeyValueArray {}
+}
+
 /// Extracts value that are owned by [`FdbFuture`].
 ///
 /// # Note
 ///
 /// You will not directly use this trait. It is used by
 /// [`Future::poll`] method on [`FdbFuture`].
-pub trait FdbFutureGet {
+pub trait FdbFutureGet: private::Sealed {
     /// Extract value that are owned by [`FdbFuture`].
     ///
     /// # Safety
     ///
     /// The caller is responsible for making sure that the pointer
     /// `future` is a valid.
+    #[doc(hidden)]
     unsafe fn get(future: *mut fdb_sys::FDBFuture) -> FdbResult<Self>
     where
         Self: Sized;
