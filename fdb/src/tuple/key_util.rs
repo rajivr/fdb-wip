@@ -12,10 +12,6 @@ use crate::error::{FdbError, FdbResult, TUPLE_KEY_UTIL_STRINC_ERROR};
 use crate::Key;
 
 /// Computes the key that would sort immediately after `key`.
-///
-/// # Panic
-///
-/// `key` must not be empty.
 pub fn key_after(key: impl Into<Key>) -> Key {
     let mut res = BytesMut::new();
     res.put(Bytes::from(key.into()));
