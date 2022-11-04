@@ -1465,12 +1465,17 @@ impl Tuple {
         TupleElementPush::push_front(self, value)
     }
 
-    /// Append elements of [`Tuple`] `t` to [`Tuple`] `Self`
-    pub fn append(&mut self, mut t: Tuple) {
+    /// Moves all the elements of the [`Tuple`] `other` into [`Tuple`]
+    /// `self`, leaving the [`Tuple`] `other` empty.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the new number of elements in self overflows a `usize`.
+    pub fn append(&mut self, other: &mut Tuple) {
         self.has_incomplete_versionstamp =
-            self.has_incomplete_versionstamp || t.has_incomplete_versionstamp();
+            self.has_incomplete_versionstamp || other.has_incomplete_versionstamp();
 
-        self.elements.append(&mut t.elements);
+        self.elements.append(&mut other.elements);
     }
 
     /// Determines if there is a [`Versionstamp`] included in this
@@ -3192,13 +3197,13 @@ mod tests {
     fn append() {
         let mut t = Tuple::new();
 
-        t.append({
+        t.append(&mut {
             let mut t1 = Tuple::new();
             t1.push_back::<Null>(Null);
             t1
         });
 
-        t.append({
+        t.append(&mut {
             let mut t1 = Tuple::new();
             t1.push_back::<Versionstamp>(Versionstamp::incomplete(0));
             t1
