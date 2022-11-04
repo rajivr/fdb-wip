@@ -977,7 +977,7 @@ impl StackMachine {
                         panic!("Error occurred during `Types::from_bytes`: {:?}", err);
                     });
 
-                    for ti in 0..packed_tuple.size() {
+                    for ti in 0..packed_tuple.len() {
                         let mut res = Tuple::new();
 
                         packed_tuple

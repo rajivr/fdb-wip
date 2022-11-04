@@ -1484,8 +1484,8 @@ impl Tuple {
         self.elements.is_empty()
     }
 
-    /// Gets the number of elements in this [`Tuple`].
-    pub fn size(&self) -> usize {
+    /// Returns the number of elements in the [`Tuple`].
+    pub fn len(&self) -> usize {
         self.elements.len()
     }
 
@@ -1725,9 +1725,9 @@ mod tests {
         t.push_front::<BigInt>(BigInt::parse_bytes(b"18446744073709551615", 10).unwrap());
         t.push_front::<BigInt>(BigInt::parse_bytes(b"18446744073709551616", 10).unwrap());
 
-        assert_eq!(8, t.size());
+        assert_eq!(8, t.len());
         assert_eq!(None, t.pop_back::<Null>());
-        assert_eq!(8, t.size());
+        assert_eq!(8, t.len());
 
         assert_eq!(
             Some(BigInt::parse_bytes(b"-18446744073709551616", 10).unwrap()),
@@ -1763,7 +1763,7 @@ mod tests {
         );
         assert_eq!(None, t.pop_back::<BigInt>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     #[test]
@@ -1772,9 +1772,9 @@ mod tests {
 
         t.push_front::<Bytes>(Bytes::from_static(b"hello_world"));
 
-        assert_eq!(1, t.size());
+        assert_eq!(1, t.len());
         assert_eq!(None, t.pop_back::<Null>());
-        assert_eq!(1, t.size());
+        assert_eq!(1, t.len());
 
         assert_eq!(
             Some(Bytes::from_static(b"hello_world")),
@@ -1782,7 +1782,7 @@ mod tests {
         );
         assert_eq!(None, t.pop_back::<Bytes>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     #[test]
@@ -1791,14 +1791,14 @@ mod tests {
 
         t.push_front::<String>("hello world".to_string());
 
-        assert_eq!(1, t.size());
+        assert_eq!(1, t.len());
         assert_eq!(None, t.pop_back::<Null>());
-        assert_eq!(1, t.size());
+        assert_eq!(1, t.len());
 
         assert_eq!(Some("hello world".to_string()), t.pop_back::<String>());
         assert_eq!(None, t.pop_back::<String>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     #[test]
@@ -1807,9 +1807,9 @@ mod tests {
 
         t.push_front::<Uuid>(Uuid::parse_str("ffffffff-ba5e-ba11-0000-00005ca1ab1e").unwrap());
 
-        assert_eq!(1, t.size());
+        assert_eq!(1, t.len());
         assert_eq!(None, t.pop_back::<Null>());
-        assert_eq!(1, t.size());
+        assert_eq!(1, t.len());
 
         assert_eq!(
             Some(Uuid::parse_str("ffffffff-ba5e-ba11-0000-00005ca1ab1e").unwrap()),
@@ -1817,7 +1817,7 @@ mod tests {
         );
         assert_eq!(None, t.pop_back::<Uuid>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     #[test]
@@ -1827,15 +1827,15 @@ mod tests {
         t.push_front::<bool>(true);
         t.push_front::<bool>(false);
 
-        assert_eq!(2, t.size());
+        assert_eq!(2, t.len());
         assert_eq!(None, t.pop_back::<Null>());
-        assert_eq!(2, t.size());
+        assert_eq!(2, t.len());
 
         assert_eq!(Some(true), t.pop_back::<bool>());
         assert_eq!(Some(false), t.pop_back::<bool>());
         assert_eq!(None, t.pop_back::<bool>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     // `3.14` is copied from Java binding tests
@@ -1846,14 +1846,14 @@ mod tests {
 
         t.push_front::<f32>(3.14f32);
 
-        assert_eq!(1, t.size());
+        assert_eq!(1, t.len());
         assert_eq!(None, t.pop_back::<Null>());
-        assert_eq!(1, t.size());
+        assert_eq!(1, t.len());
 
         assert_eq!(Some(3.14f32), t.pop_back::<f32>());
         assert_eq!(None, t.pop_back::<f32>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     // `3.14` is copied from Java binding tests
@@ -1864,14 +1864,14 @@ mod tests {
 
         t.push_front::<f64>(-3.14f64);
 
-        assert_eq!(1, t.size());
+        assert_eq!(1, t.len());
         assert_eq!(None, t.pop_back::<Null>());
-        assert_eq!(1, t.size());
+        assert_eq!(1, t.len());
 
         assert_eq!(Some(-3.14f64), t.pop_back::<f64>());
         assert_eq!(None, t.pop_back::<f64>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     #[test]
@@ -1889,9 +1889,9 @@ mod tests {
         t.push_front::<i16>(256);
         t.push_front::<i16>(i16::MAX);
 
-        assert_eq!(10, t.size());
+        assert_eq!(10, t.len());
         assert_eq!(None, t.pop_back::<Null>());
-        assert_eq!(10, t.size());
+        assert_eq!(10, t.len());
 
         assert_eq!(Some(i16::MIN), t.pop_back::<i16>());
         assert_eq!(Some(-256), t.pop_back::<i16>());
@@ -1905,7 +1905,7 @@ mod tests {
         assert_eq!(Some(i16::MAX), t.pop_back::<i16>());
         assert_eq!(None, t.pop_back::<i16>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     #[test]
@@ -1927,9 +1927,9 @@ mod tests {
         t.push_front::<i32>(16777216);
         t.push_front::<i32>(i32::MAX);
 
-        assert_eq!(14, t.size());
+        assert_eq!(14, t.len());
         assert_eq!(None, t.pop_back::<Null>());
-        assert_eq!(14, t.size());
+        assert_eq!(14, t.len());
 
         assert_eq!(Some(i32::MIN), t.pop_back::<i32>());
         assert_eq!(Some(-16777216), t.pop_back::<i32>());
@@ -1947,7 +1947,7 @@ mod tests {
         assert_eq!(Some(i32::MAX), t.pop_back::<i32>());
         assert_eq!(None, t.pop_back::<i32>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     #[test]
@@ -1977,9 +1977,9 @@ mod tests {
         t.push_front::<i64>(72057594037927936);
         t.push_front::<i64>(i64::MAX);
 
-        assert_eq!(22, t.size());
+        assert_eq!(22, t.len());
         assert_eq!(None, t.pop_back::<Null>());
-        assert_eq!(22, t.size());
+        assert_eq!(22, t.len());
 
         assert_eq!(Some(i64::MIN), t.pop_back::<i64>());
         assert_eq!(Some(-72057594037927936), t.pop_back::<i64>());
@@ -2005,7 +2005,7 @@ mod tests {
         assert_eq!(Some(i64::MAX), t.pop_back::<i64>());
         assert_eq!(None, t.pop_back::<i64>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     #[test]
@@ -2016,16 +2016,16 @@ mod tests {
         t.push_front::<i8>(0);
         t.push_front::<i8>(i8::MAX);
 
-        assert_eq!(3, t.size());
+        assert_eq!(3, t.len());
         assert_eq!(None, t.pop_back::<Null>());
-        assert_eq!(3, t.size());
+        assert_eq!(3, t.len());
 
         assert_eq!(Some(i8::MIN), t.pop_back::<i8>());
         assert_eq!(Some(0), t.pop_back::<i8>());
         assert_eq!(Some(i8::MAX), t.pop_back::<i8>());
         assert_eq!(None, t.pop_back::<i8>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     #[test]
@@ -2037,36 +2037,36 @@ mod tests {
         // Test for all other types, except `Null`. In the other
         // tests, use `t.pop_back::<Null>()`.
         assert_eq!(None, t.pop_back::<BigInt>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_back::<Bytes>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_back::<String>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_back::<Uuid>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_back::<bool>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_back::<f32>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_back::<f64>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_back::<i16>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_back::<i32>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_back::<i64>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_back::<i8>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_back::<Versionstamp>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_back::<Tuple>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
 
         assert_eq!(Some(Null), t.pop_back::<Null>());
         assert_eq!(None, t.pop_back::<Null>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     #[test]
@@ -2079,9 +2079,9 @@ mod tests {
             657,
         ));
 
-        assert_eq!(2, t.size());
+        assert_eq!(2, t.len());
         assert_eq!(None, t.pop_back::<Null>());
-        assert_eq!(2, t.size());
+        assert_eq!(2, t.len());
 
         assert!(t.has_incomplete_versionstamp());
 
@@ -2092,7 +2092,7 @@ mod tests {
 
         assert!(!t.has_incomplete_versionstamp());
 
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
     }
 
     #[test]
@@ -2110,9 +2110,9 @@ mod tests {
             657,
         ));
 
-        assert_eq!(3, t.size());
+        assert_eq!(3, t.len());
         assert_eq!(None, t.pop_back::<Null>());
-        assert_eq!(3, t.size());
+        assert_eq!(3, t.len());
 
         assert!(t.has_incomplete_versionstamp());
 
@@ -2127,7 +2127,7 @@ mod tests {
 
         assert!(!t.has_incomplete_versionstamp());
 
-        assert_eq!(t.size(), 2);
+        assert_eq!(t.len(), 2);
     }
 
     #[test]
@@ -2143,9 +2143,9 @@ mod tests {
         t.push_back::<BigInt>(BigInt::parse_bytes(b"18446744073709551615", 10).unwrap());
         t.push_back::<BigInt>(BigInt::parse_bytes(b"18446744073709551616", 10).unwrap());
 
-        assert_eq!(8, t.size());
+        assert_eq!(8, t.len());
         assert_eq!(None, t.pop_front::<Null>());
-        assert_eq!(8, t.size());
+        assert_eq!(8, t.len());
 
         assert_eq!(
             Some(BigInt::parse_bytes(b"-18446744073709551616", 10).unwrap()),
@@ -2181,7 +2181,7 @@ mod tests {
         );
         assert_eq!(None, t.pop_front::<BigInt>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     #[test]
@@ -2190,9 +2190,9 @@ mod tests {
 
         t.push_back::<Bytes>(Bytes::from_static(b"hello_world"));
 
-        assert_eq!(1, t.size());
+        assert_eq!(1, t.len());
         assert_eq!(None, t.pop_front::<Null>());
-        assert_eq!(1, t.size());
+        assert_eq!(1, t.len());
 
         assert_eq!(
             Some(Bytes::from_static(b"hello_world")),
@@ -2200,7 +2200,7 @@ mod tests {
         );
         assert_eq!(None, t.pop_front::<Bytes>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     #[test]
@@ -2209,14 +2209,14 @@ mod tests {
 
         t.push_back::<String>("hello world".to_string());
 
-        assert_eq!(1, t.size());
+        assert_eq!(1, t.len());
         assert_eq!(None, t.pop_front::<Null>());
-        assert_eq!(1, t.size());
+        assert_eq!(1, t.len());
 
         assert_eq!(Some("hello world".to_string()), t.pop_front::<String>());
         assert_eq!(None, t.pop_front::<String>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     #[test]
@@ -2225,9 +2225,9 @@ mod tests {
 
         t.push_back::<Uuid>(Uuid::parse_str("ffffffff-ba5e-ba11-0000-00005ca1ab1e").unwrap());
 
-        assert_eq!(1, t.size());
+        assert_eq!(1, t.len());
         assert_eq!(None, t.pop_front::<Null>());
-        assert_eq!(1, t.size());
+        assert_eq!(1, t.len());
 
         assert_eq!(
             Some(Uuid::parse_str("ffffffff-ba5e-ba11-0000-00005ca1ab1e").unwrap()),
@@ -2235,7 +2235,7 @@ mod tests {
         );
         assert_eq!(None, t.pop_front::<Uuid>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     #[test]
@@ -2245,15 +2245,15 @@ mod tests {
         t.push_back::<bool>(true);
         t.push_back::<bool>(false);
 
-        assert_eq!(2, t.size());
+        assert_eq!(2, t.len());
         assert_eq!(None, t.pop_front::<Null>());
-        assert_eq!(2, t.size());
+        assert_eq!(2, t.len());
 
         assert_eq!(Some(true), t.pop_front::<bool>());
         assert_eq!(Some(false), t.pop_front::<bool>());
         assert_eq!(None, t.pop_front::<bool>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     // `3.14` is copied from Java binding tests
@@ -2264,14 +2264,14 @@ mod tests {
 
         t.push_back::<f32>(3.14f32);
 
-        assert_eq!(1, t.size());
+        assert_eq!(1, t.len());
         assert_eq!(None, t.pop_front::<Null>());
-        assert_eq!(1, t.size());
+        assert_eq!(1, t.len());
 
         assert_eq!(Some(3.14f32), t.pop_front::<f32>());
         assert_eq!(None, t.pop_front::<f32>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     // `3.14` is copied from Java binding tests
@@ -2282,14 +2282,14 @@ mod tests {
 
         t.push_back::<f64>(-3.14f64);
 
-        assert_eq!(1, t.size());
+        assert_eq!(1, t.len());
         assert_eq!(None, t.pop_front::<Null>());
-        assert_eq!(1, t.size());
+        assert_eq!(1, t.len());
 
         assert_eq!(Some(-3.14f64), t.pop_front::<f64>());
         assert_eq!(None, t.pop_front::<f64>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     #[test]
@@ -2307,9 +2307,9 @@ mod tests {
         t.push_back::<i16>(256);
         t.push_back::<i16>(i16::MAX);
 
-        assert_eq!(10, t.size());
+        assert_eq!(10, t.len());
         assert_eq!(None, t.pop_front::<Null>());
-        assert_eq!(10, t.size());
+        assert_eq!(10, t.len());
 
         assert_eq!(Some(i16::MIN), t.pop_front::<i16>());
         assert_eq!(Some(-256), t.pop_front::<i16>());
@@ -2323,7 +2323,7 @@ mod tests {
         assert_eq!(Some(i16::MAX), t.pop_front::<i16>());
         assert_eq!(None, t.pop_front::<i16>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     #[test]
@@ -2345,9 +2345,9 @@ mod tests {
         t.push_back::<i32>(16777216);
         t.push_back::<i32>(i32::MAX);
 
-        assert_eq!(14, t.size());
+        assert_eq!(14, t.len());
         assert_eq!(None, t.pop_front::<Null>());
-        assert_eq!(14, t.size());
+        assert_eq!(14, t.len());
 
         assert_eq!(Some(i32::MIN), t.pop_front::<i32>());
         assert_eq!(Some(-16777216), t.pop_front::<i32>());
@@ -2365,7 +2365,7 @@ mod tests {
         assert_eq!(Some(i32::MAX), t.pop_front::<i32>());
         assert_eq!(None, t.pop_front::<i32>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     #[test]
@@ -2395,9 +2395,9 @@ mod tests {
         t.push_back::<i64>(72057594037927936);
         t.push_back::<i64>(i64::MAX);
 
-        assert_eq!(22, t.size());
+        assert_eq!(22, t.len());
         assert_eq!(None, t.pop_front::<Null>());
-        assert_eq!(22, t.size());
+        assert_eq!(22, t.len());
 
         assert_eq!(Some(i64::MIN), t.pop_front::<i64>());
         assert_eq!(Some(-72057594037927936), t.pop_front::<i64>());
@@ -2423,7 +2423,7 @@ mod tests {
         assert_eq!(Some(i64::MAX), t.pop_front::<i64>());
         assert_eq!(None, t.pop_front::<i64>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     #[test]
@@ -2434,16 +2434,16 @@ mod tests {
         t.push_back::<i8>(0);
         t.push_back::<i8>(i8::MAX);
 
-        assert_eq!(3, t.size());
+        assert_eq!(3, t.len());
         assert_eq!(None, t.pop_front::<Null>());
-        assert_eq!(3, t.size());
+        assert_eq!(3, t.len());
 
         assert_eq!(Some(i8::MIN), t.pop_front::<i8>());
         assert_eq!(Some(0), t.pop_front::<i8>());
         assert_eq!(Some(i8::MAX), t.pop_front::<i8>());
         assert_eq!(None, t.pop_front::<i8>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     #[test]
@@ -2455,36 +2455,36 @@ mod tests {
         // Test for all other types, except `Null`. In the other
         // tests, use `t.pop_front::<Null>()`.
         assert_eq!(None, t.pop_front::<BigInt>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_front::<Bytes>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_front::<String>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_front::<Uuid>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_front::<bool>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_front::<f32>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_front::<f64>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_front::<i16>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_front::<i32>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_front::<i64>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_front::<i8>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_front::<Versionstamp>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
         assert_eq!(None, t.pop_front::<Tuple>());
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
 
         assert_eq!(Some(Null), t.pop_front::<Null>());
         assert_eq!(None, t.pop_front::<Null>());
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
     }
 
     #[test]
@@ -2497,9 +2497,9 @@ mod tests {
             657,
         ));
 
-        assert_eq!(2, t.size());
+        assert_eq!(2, t.len());
         assert_eq!(None, t.pop_front::<Null>());
-        assert_eq!(2, t.size());
+        assert_eq!(2, t.len());
 
         assert!(t.has_incomplete_versionstamp());
 
@@ -2510,7 +2510,7 @@ mod tests {
 
         assert!(!t.has_incomplete_versionstamp());
 
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
     }
 
     #[test]
@@ -2528,9 +2528,9 @@ mod tests {
             657,
         ));
 
-        assert_eq!(3, t.size());
+        assert_eq!(3, t.len());
         assert_eq!(None, t.pop_front::<Null>());
-        assert_eq!(3, t.size());
+        assert_eq!(3, t.len());
 
         assert!(t.has_incomplete_versionstamp());
 
@@ -2545,7 +2545,7 @@ mod tests {
 
         assert!(!t.has_incomplete_versionstamp());
 
-        assert_eq!(t.size(), 2);
+        assert_eq!(t.len(), 2);
     }
 
     #[test]
@@ -3610,14 +3610,14 @@ mod tests {
     }
 
     #[test]
-    fn size() {
+    fn len() {
         let mut t = Tuple::new();
 
-        assert_eq!(t.size(), 0);
+        assert_eq!(t.len(), 0);
 
         t.push_back::<Null>(Null);
 
-        assert_eq!(t.size(), 1);
+        assert_eq!(t.len(), 1);
     }
 
     // `3.14` is copied from Java binding tests
