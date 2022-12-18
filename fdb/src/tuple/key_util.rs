@@ -94,15 +94,18 @@ mod tests {
 
     use super::{key_after, rstrip_xff, starts_with, strinc};
 
+    // *Note:* We prefix with `test_` here because we do not want to
+    //         conflict with similarly named function above.
+
     #[test]
     fn test_key_after() {
         assert_eq!(
             key_after(Bytes::new()),
-            Key::from(Bytes::from_static(&b"\x00"[..]))
+            Key::from(Bytes::from_static(b"\x00"))
         );
         assert_eq!(
-            key_after(Bytes::from_static(&b"hello_world"[..])),
-            Key::from(Bytes::from_static(&b"hello_world\x00"[..])),
+            key_after(Bytes::from_static(b"hello_world")),
+            Key::from(Bytes::from_static(b"hello_world\x00")),
         );
     }
 
@@ -110,18 +113,18 @@ mod tests {
     fn test_starts_with() {
         // length mismatch
         assert!(!starts_with(
-            Bytes::from_static(&b"p"[..]),
-            Bytes::from_static(&b"prefix"[..])
+            Bytes::from_static(b"p"),
+            Bytes::from_static(b"prefix")
         ));
 
         assert!(!starts_with(
-            Bytes::from_static(&b"wrong_prefix"[..]),
-            Bytes::from_static(&b"prefix"[..])
+            Bytes::from_static(b"wrong_prefix"),
+            Bytes::from_static(b"prefix")
         ));
 
         assert!(starts_with(
-            Bytes::from_static(&b"prefix_plus_something_else"[..]),
-            Bytes::from_static(&b"prefix"[..])
+            Bytes::from_static(b"prefix_plus_something_else"),
+            Bytes::from_static(b"prefix")
         ));
     }
 
@@ -133,37 +136,37 @@ mod tests {
         );
 
         assert_eq!(
-            rstrip_xff(Bytes::from_static(&b"\xFF"[..])),
+            rstrip_xff(Bytes::from_static(b"\xFF")),
             Err(FdbError::new(TUPLE_KEY_UTIL_STRINC_ERROR))
         );
 
         assert_eq!(
-            rstrip_xff(Bytes::from_static(&b"\xFF\xFF"[..])),
+            rstrip_xff(Bytes::from_static(b"\xFF\xFF")),
             Err(FdbError::new(TUPLE_KEY_UTIL_STRINC_ERROR))
         );
         assert_eq!(
-            rstrip_xff(Bytes::from_static(&b"\x00"[..])),
-            Ok(Bytes::from_static(&b"\x00"[..]))
+            rstrip_xff(Bytes::from_static(b"\x00")),
+            Ok(Bytes::from_static(b"\x00"))
         );
         assert_eq!(
-            rstrip_xff(Bytes::from_static(&b"\xFE"[..])),
-            Ok(Bytes::from_static(&b"\xFE"[..]))
+            rstrip_xff(Bytes::from_static(b"\xFE")),
+            Ok(Bytes::from_static(b"\xFE"))
         );
         assert_eq!(
-            rstrip_xff(Bytes::from_static(&b"a\xFF"[..])),
-            Ok(Bytes::from_static(&b"a"[..]))
+            rstrip_xff(Bytes::from_static(b"a\xFF")),
+            Ok(Bytes::from_static(b"a"))
         );
         assert_eq!(
-            rstrip_xff(Bytes::from_static(&b"hello1"[..])),
-            Ok(Bytes::from_static(&b"hello1"[..]))
+            rstrip_xff(Bytes::from_static(b"hello1")),
+            Ok(Bytes::from_static(b"hello1"))
         );
         assert_eq!(
-            rstrip_xff(Bytes::from_static(&b"hello1\xFF"[..])),
-            Ok(Bytes::from_static(&b"hello1"[..]))
+            rstrip_xff(Bytes::from_static(b"hello1\xFF")),
+            Ok(Bytes::from_static(b"hello1"))
         );
         assert_eq!(
-            rstrip_xff(Bytes::from_static(&b"hello1\xFF\xFF"[..])),
-            Ok(Bytes::from_static(&b"hello1"[..]))
+            rstrip_xff(Bytes::from_static(b"hello1\xFF\xFF")),
+            Ok(Bytes::from_static(b"hello1"))
         );
     }
 
@@ -174,36 +177,36 @@ mod tests {
             Err(FdbError::new(TUPLE_KEY_UTIL_STRINC_ERROR))
         );
         assert_eq!(
-            strinc(Bytes::from_static(&b"\xFF"[..])),
+            strinc(Bytes::from_static(b"\xFF")),
             Err(FdbError::new(TUPLE_KEY_UTIL_STRINC_ERROR))
         );
         assert_eq!(
-            strinc(Bytes::from_static(&b"\xFF\xFF"[..])),
+            strinc(Bytes::from_static(b"\xFF\xFF")),
             Err(FdbError::new(TUPLE_KEY_UTIL_STRINC_ERROR))
         );
         assert_eq!(
-            strinc(Bytes::from_static(&b"\x00"[..])),
-            Ok(Key::from(Bytes::from_static(&b"\x01"[..])))
+            strinc(Bytes::from_static(b"\x00")),
+            Ok(Key::from(Bytes::from_static(b"\x01")))
         );
         assert_eq!(
-            strinc(Bytes::from_static(&b"\xFE"[..])),
-            Ok(Key::from(Bytes::from_static(&b"\xFF"[..])))
+            strinc(Bytes::from_static(b"\xFE")),
+            Ok(Key::from(Bytes::from_static(b"\xFF")))
         );
         assert_eq!(
-            strinc(Bytes::from_static(&b"a\xFF"[..])),
-            Ok(Key::from(Bytes::from_static(&b"b"[..])))
+            strinc(Bytes::from_static(b"a\xFF")),
+            Ok(Key::from(Bytes::from_static(b"b")))
         );
         assert_eq!(
-            strinc(Bytes::from_static(&b"hello1"[..])),
-            Ok(Key::from(Bytes::from_static(&b"hello2"[..])))
+            strinc(Bytes::from_static(b"hello1")),
+            Ok(Key::from(Bytes::from_static(b"hello2")))
         );
         assert_eq!(
-            strinc(Bytes::from_static(&b"hello1\xFF"[..])),
-            Ok(Key::from(Bytes::from_static(&b"hello2"[..])))
+            strinc(Bytes::from_static(b"hello1\xFF")),
+            Ok(Key::from(Bytes::from_static(b"hello2")))
         );
         assert_eq!(
-            strinc(Bytes::from_static(&b"hello1\xFF\xFF"[..])),
-            Ok(Key::from(Bytes::from_static(&b"hello2"[..])))
+            strinc(Bytes::from_static(b"hello1\xFF\xFF")),
+            Ok(Key::from(Bytes::from_static(b"hello2")))
         );
     }
 }

@@ -158,7 +158,7 @@ impl Range {
 ///
 /// [streaming mode]: StreamingMode
 /// [iterator streaming mode]: StreamingMode::Iterator
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RangeOptions {
     pub(crate) limit: i32,
     pub(crate) mode: StreamingMode,
