@@ -70,6 +70,9 @@ pub const TUPLE_PACK_WITH_VERSIONSTAMP_MULTIPLE_FOUND: i32 = 115;
 /// [`strinc`]: crate::tuple::key_util::strinc
 pub const TUPLE_KEY_UTIL_STRINC_ERROR: i32 = 116;
 
+/// TODO
+pub const TUPLE_VERSIONSTAMP_TRY_FROM: i32 = 117;
+
 /// Error occured when trying to pack [`Subspace`] containing an
 /// incomplete [`Versionstamp`]. Prefix contains an incomplete
 /// [`Versionstamp`], which is not allowed.

@@ -1,6 +1,10 @@
 use bytes::{Buf, BufMut};
 use bytes::{Bytes, BytesMut};
 
+use std::convert::TryFrom;
+
+use crate::error::{FdbError, FdbResult, TUPLE_VERSIONSTAMP_TRY_FROM};
+
 // As mentioned here [1], depending on the context, there are two
 // concepts of versionstamp.
 //
@@ -19,6 +23,9 @@ use bytes::{Bytes, BytesMut};
 // [1]: https://apple.github.io/foundationdb/data-modeling.html#versionstamps
 const VERSIONSTAMP_TR_VERSION_LEN: usize = 10;
 const VERSIONSTAMP_USER_VERSION_LEN: usize = 2;
+
+const VERSIONSTAMP_INCOMPLETE_TR_VERSION: Bytes =
+    Bytes::from_static(b"\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF");
 
 /// Used to represent values written by versionstamp operations with a
 /// [`Tuple`].
@@ -53,8 +60,8 @@ const VERSIONSTAMP_USER_VERSION_LEN: usize = 2;
 ///     .run(|tr| async move {
 ///         let t = {
 ///             let mut tup = Tuple::new();
-///             tup.add_string(String::from("prefix"));
-///             tup.add_versionstamp(Versionstamp::incomplete(0));
+///             tup.push_back::<String>(String::from("prefix"));
+///             tup.push_back::<Versionstamp>(Versionstamp::incomplete(0));
 ///             tup
 ///         };
 ///
@@ -76,7 +83,7 @@ const VERSIONSTAMP_USER_VERSION_LEN: usize = 2;
 ///     .run(|tr| async move {
 ///         let subspace = Subspace::new(Bytes::new()).subspace(&{
 ///             let mut tup = Tuple::new();
-///             tup.add_string("prefix".to_string());
+///             tup.push_back::<String>("prefix".to_string());
 ///             tup
 ///         });
 ///
@@ -92,7 +99,8 @@ const VERSIONSTAMP_USER_VERSION_LEN: usize = 2;
 ///
 ///         Ok(subspace
 ///             .unpack(&key.into())?
-///             .get_versionstamp_ref(0)?
+///             .get::<&Versionstamp>(0)
+///             .ok_or(FdbError::new(TUPLE_GET))?
 ///             .clone())
 ///     })
 ///     .await?;
@@ -179,11 +187,10 @@ impl Versionstamp {
     /// user version.
     pub fn incomplete(user_version: u16) -> Versionstamp {
         let complete = false;
-        let tr_version = Bytes::from_static(b"\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF");
 
         Versionstamp {
             complete,
-            tr_version,
+            tr_version: VERSIONSTAMP_INCOMPLETE_TR_VERSION,
             user_version,
         }
     }
@@ -215,11 +222,52 @@ impl Versionstamp {
     pub fn is_complete(&self) -> bool {
         self.complete
     }
+
+    /// Extract transaction version, user version and completion flag
+    /// from [`Versionstamp`].
+    pub fn into_parts(self) -> (Bytes, u16, bool) {
+        let Versionstamp {
+            complete,
+            tr_version,
+            user_version,
+        } = self;
+        (tr_version, user_version, complete)
+    }
+}
+
+impl TryFrom<(Bytes, u16)> for Versionstamp {
+    type Error = FdbError;
+
+    /// [`Bytes`] value would be the "transaction" version and [`u16`]
+    /// value would be the "user" version.
+    // TODO: tests + why is it needed?
+    fn try_from(value: (Bytes, u16)) -> FdbResult<Versionstamp> {
+        let (tr_version, user_version) = value;
+
+        if tr_version.len() == VERSIONSTAMP_TR_VERSION_LEN {
+            let complete = if tr_version == VERSIONSTAMP_INCOMPLETE_TR_VERSION {
+                false
+            } else {
+                true
+            };
+            Ok(Versionstamp {
+                complete,
+                tr_version,
+                user_version,
+            })
+        } else {
+            Err(FdbError::new(TUPLE_VERSIONSTAMP_TRY_FROM))
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use bytes::Bytes;
+
+    use std::convert::TryFrom;
+
+    use crate::error::{FdbError, TUPLE_VERSIONSTAMP_TRY_FROM};
 
     use super::Versionstamp;
 
@@ -336,5 +384,55 @@ mod tests {
         .is_complete());
 
         assert!(!(Versionstamp::incomplete(657)).is_complete());
+    }
+
+    #[test]
+    fn into_parts() {
+        let vs = Versionstamp::complete(
+            Bytes::from_static(b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"),
+            657,
+        );
+
+        let (transaction_version, user_version, completion) = vs.clone().into_parts();
+
+        assert_eq!(transaction_version, vs.get_transaction_version());
+        assert_eq!(user_version, vs.get_user_version());
+        assert_eq!(completion, vs.is_complete());
+
+        let vs = Versionstamp::incomplete(657);
+
+        let (transaction_version, user_version, completion) = vs.clone().into_parts();
+
+        assert_eq!(transaction_version, vs.get_transaction_version());
+        assert_eq!(user_version, vs.get_user_version());
+        assert_eq!(completion, vs.is_complete());
+    }
+
+    #[test]
+    fn try_from_bytes_u16() {
+        let vs1 = Versionstamp::try_from((
+            Bytes::from_static(b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"),
+            657,
+        ));
+
+        let vs2 = Versionstamp::complete(
+            Bytes::from_static(b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"),
+            657,
+        );
+
+        assert_eq!(vs1, Ok(vs2));
+
+        let vs1 = Versionstamp::try_from((
+            Bytes::from_static(b"\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"),
+            657,
+        ));
+
+        let vs2 = Versionstamp::incomplete(657);
+
+        assert_eq!(vs1, Ok(vs2));
+
+        let vs1 = Versionstamp::try_from((Bytes::from_static(b"invalid"), 657));
+
+        assert_eq!(vs1, Err(FdbError::new(TUPLE_VERSIONSTAMP_TRY_FROM)));
     }
 }

@@ -5,7 +5,7 @@ use bytes::Bytes;
 /// of bytes.
 ///
 /// [`Key`] can be converted from and into [`Bytes`].
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, Ord, Eq)]
 pub struct Key(Bytes);
 
 impl From<Bytes> for Key {
