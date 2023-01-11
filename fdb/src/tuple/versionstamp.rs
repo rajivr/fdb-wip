@@ -122,9 +122,10 @@ const VERSIONSTAMP_INCOMPLETE_TR_VERSION: Bytes =
 /// [`SetVersionstampedKey`]: crate::transaction::MutationType::SetVersionstampedKey
 #[derive(Clone, Ord, Eq, PartialOrd, PartialEq, Debug)]
 pub struct Versionstamp {
-    complete: bool,
+    // *Note:* Do not change the ordering here.
     tr_version: Bytes,
     user_version: u16,
+    complete: bool,
 }
 
 impl Versionstamp {
