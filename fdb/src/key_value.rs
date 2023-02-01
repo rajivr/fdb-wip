@@ -92,7 +92,7 @@ impl KeyValue {
 /// actual key by transaction's [`get_key`] or used directly as the
 /// beginning or end of a range in transaction's [`get_range`].
 ///
-/// For more about how key selectors work in practive, see the [`key
+/// For more about how key selectors work in practice, see the [`key
 /// selector`] documentation. Note that the way key selectors are
 /// resolved is somewhat non-intuitive, so users who wish to use a key
 /// selector other than the default ones described below should
