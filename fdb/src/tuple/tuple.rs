@@ -1573,6 +1573,10 @@ impl Tuple {
     pub(crate) fn into_elements(self) -> Vec<TupleValue> {
         self.elements.into()
     }
+
+    pub(crate) fn get_element(&self, index: usize) -> Option<&TupleValue> {
+        self.elements.get(index)
+    }
 }
 
 impl Default for Tuple {

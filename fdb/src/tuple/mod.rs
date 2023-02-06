@@ -16,8 +16,13 @@ mod versionstamp;
 #[allow(clippy::module_inception)]
 mod tuple;
 
+mod tuple_schema;
+
 pub mod key_util;
+
+pub(crate) use element::TupleValue;
 
 pub use null::Null;
 pub use tuple::{Tuple, TupleElementGet, TupleElementPop, TupleElementPush};
+pub use tuple_schema::{TupleSchema, TupleSchemaElement};
 pub use versionstamp::Versionstamp;

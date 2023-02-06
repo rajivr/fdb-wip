@@ -305,7 +305,7 @@ impl MappedRangeResultStateMachine {
                         count,
                         more,
                     } => {
-                        // tansition action
+                        // transition action
 
                         // Once we are done with `mkvs` we'll we need
                         // to fetch the next batch if `more` is
