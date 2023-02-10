@@ -4,7 +4,10 @@ use crate::tuple::{Tuple, TupleValue};
 
 /// Represents a schema for a [`Tuple`].
 ///
-/// A [`TupleSchema`] consists of [`TupleSchemaElement`]s.
+/// A [`TupleSchema`] consists of
+/// [`TupleSchemaElement`]s. [`TupleSchema::validate`] method can be
+/// used to verify the conformance of a value of [`Tuple`] to its
+/// schema.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TupleSchema {
     elements: VecDeque<TupleSchemaElement>,
@@ -1057,5 +1060,125 @@ mod tests {
             t.push_back::<Null>(Null);
             assert!(ts.validate(&t));
         }
+    }
+
+    #[test]
+    fn validate_multiple() {
+        {
+            let mut t = Tuple::new();
+            t.push_back::<Null>(Null);
+            t.push_back::<Bytes>(Bytes::from_static(b"hello_world"));
+
+            let mut ts1 = TupleSchema::new();
+            ts1.push_back(TupleSchemaElement::Null);
+            ts1.push_back(TupleSchemaElement::Bytes);
+            assert!(ts1.validate(&t));
+
+            let mut ts2 = TupleSchema::new();
+            ts2.push_back(TupleSchemaElement::Null);
+            ts2.push_back(TupleSchemaElement::MaybeBytes);
+            assert!(ts2.validate(&t));
+        }
+
+        {
+            let mut t = Tuple::new();
+            t.push_back::<Bytes>(Bytes::from_static(b"hello_world"));
+            t.push_back::<Tuple>({
+                let mut t_inner = Tuple::new();
+                t_inner.push_back::<Null>(Null);
+                t_inner.push_back::<String>("hello_world".to_string());
+                t_inner
+            });
+            t.push_back::<Versionstamp>(Versionstamp::complete(
+                Bytes::from_static(&b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"[..]),
+                657,
+            ));
+
+            let mut ts1 = TupleSchema::new();
+            ts1.push_back(TupleSchemaElement::Bytes);
+            ts1.push_back(TupleSchemaElement::Tuple({
+                let mut ts_inner = TupleSchema::new();
+                ts_inner.push_back(TupleSchemaElement::Null);
+                ts_inner.push_back(TupleSchemaElement::String);
+                ts_inner
+            }));
+            ts1.push_back(TupleSchemaElement::Versionstamp);
+            assert!(ts1.validate(&t));
+
+            let mut ts2 = TupleSchema::new();
+            ts2.push_back(TupleSchemaElement::MaybeBytes);
+            ts2.push_back(TupleSchemaElement::MaybeTuple({
+                let mut ts_inner = TupleSchema::new();
+                ts_inner.push_back(TupleSchemaElement::Null);
+                ts_inner.push_back(TupleSchemaElement::MaybeString);
+                ts_inner
+            }));
+            ts2.push_back(TupleSchemaElement::MaybeVersionstamp);
+            assert!(ts2.validate(&t));
+
+            // Invalid schema. Change the order from
+            // `(MaybeBytes, (Null, MaybeString), MaybeVersionstamp)` to
+            // `((Null, MaybeString), MaybeTuple, MaybeVersionstamp)`
+            let mut ts3 = TupleSchema::new();
+            ts3.push_back(TupleSchemaElement::MaybeTuple({
+                let mut ts_inner = TupleSchema::new();
+                ts_inner.push_back(TupleSchemaElement::Null);
+                ts_inner.push_back(TupleSchemaElement::MaybeString);
+                ts_inner
+            }));
+            ts3.push_back(TupleSchemaElement::MaybeBytes);
+            ts3.push_back(TupleSchemaElement::MaybeVersionstamp);
+            assert!(!ts3.validate(&t));
+
+            // Invalid schema. Change the order from
+            // `(MaybeBytes, (Null, MaybeString), MaybeVersionstamp)` to
+            // `(MaybeBytes, (MaybeString, Null), MaybeVersionstamp)`
+            let mut ts4 = TupleSchema::new();
+            ts4.push_back(TupleSchemaElement::MaybeBytes);
+            ts4.push_back(TupleSchemaElement::MaybeTuple({
+                let mut ts_inner = TupleSchema::new();
+                ts_inner.push_back(TupleSchemaElement::MaybeString);
+                ts_inner.push_back(TupleSchemaElement::Null);
+                ts_inner
+            }));
+            ts4.push_back(TupleSchemaElement::MaybeVersionstamp);
+            assert!(!ts4.validate(&t));
+        }
+    }
+
+    #[test]
+    fn validate_nested() {
+        // `((((Null,),),),)`
+        let mut ts = TupleSchema::new();
+        ts.push_back(TupleSchemaElement::Tuple({
+            let mut ts_inner1 = TupleSchema::new();
+            ts_inner1.push_back(TupleSchemaElement::Tuple({
+                let mut ts_inner2 = TupleSchema::new();
+                ts_inner2.push_back(TupleSchemaElement::Tuple({
+                    let mut ts_inner3 = TupleSchema::new();
+                    ts_inner3.push_back(TupleSchemaElement::Null);
+                    ts_inner3
+                }));
+                ts_inner2
+            }));
+            ts_inner1
+        }));
+
+        let mut t = Tuple::new();
+        t.push_back::<Tuple>({
+            let mut t_inner1 = Tuple::new();
+            t_inner1.push_back::<Tuple>({
+                let mut t_inner2 = Tuple::new();
+                t_inner2.push_back({
+                    let mut t_inner3 = Tuple::new();
+                    t_inner3.push_back::<Null>(Null);
+                    t_inner3
+                });
+                t_inner2
+            });
+            t_inner1
+        });
+
+        assert!(ts.validate(&t));
     }
 }
