@@ -1,3 +1,4 @@
+use std::collections::vec_deque::Iter;
 use std::collections::VecDeque;
 
 use crate::tuple::{Tuple, TupleValue};
@@ -64,6 +65,11 @@ impl TupleSchema {
     pub fn validate(&self, tuple: &Tuple) -> bool {
         let mut tuple_visitor = TupleVisitor::new(tuple);
         walk_tuple_schema(&mut tuple_visitor, self)
+    }
+
+    /// Returns an iterator of [`TupleSchemaElement`].
+    pub fn iter(&self) -> Iter<'_, TupleSchemaElement> {
+        self.elements.iter()
     }
 }
 
@@ -1180,5 +1186,20 @@ mod tests {
         });
 
         assert!(ts.validate(&t));
+    }
+
+    #[test]
+    fn iter() {
+        let mut tuple_schema = TupleSchema::new();
+
+        tuple_schema.push_back(TupleSchemaElement::Null);
+        tuple_schema.push_back(TupleSchemaElement::Bytes);
+
+        for (value, expected) in tuple_schema
+            .iter()
+            .zip(vec![&TupleSchemaElement::Null, &TupleSchemaElement::Bytes])
+        {
+            assert_eq!(value, expected);
+        }
     }
 }
