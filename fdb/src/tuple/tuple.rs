@@ -1433,6 +1433,9 @@ impl Tuple {
 
     /// Removes the last element from the [`Tuple`] and returns it, or
     /// `None` if it is empty.
+    ///
+    /// If there is a value of a different type other than type `T`,
+    /// the [`Tuple`] is *not* mutated and `None` is returned.
     pub fn pop_back<T>(&mut self) -> Option<T>
     where
         T: TupleElementPop,
@@ -1442,6 +1445,9 @@ impl Tuple {
 
     /// Removes the first element from the [`Tuple`] and returns it,
     /// or `None` if it is empty.
+    ///
+    /// If there is a value of a different type other than type `T`,
+    /// the [`Tuple`] is *not* mutated and `None` is returned.
     pub fn pop_front<T>(&mut self) -> Option<T>
     where
         T: TupleElementPop,

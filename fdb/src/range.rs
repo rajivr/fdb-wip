@@ -264,7 +264,7 @@ enum RangeResultStateMachineData {
     Done,
 }
 
-// The variant names match with the sismic events.
+/// The variant names match with the sismic events.
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug)]
 enum RangeResultStateMachineEvent {
@@ -283,11 +283,11 @@ enum RangeResultStateMachineEvent {
     FetchDone,
 }
 
-// A state machine that returns the key-value pairs from the database
-// satisfying the range specified in a range read.
-//
-// See `sismic/range_result_state_machine.yaml` for the design of the
-// state machine.
+/// A state machine that returns the key-value pairs from the database
+/// satisfying the range specified in a range read.
+///
+/// See `sismic/range_result_state_machine.yaml` for the design of the
+/// state machine.
 #[derive(Debug)]
 pub(crate) struct RangeResultStateMachine {
     transaction: FdbTransaction,
