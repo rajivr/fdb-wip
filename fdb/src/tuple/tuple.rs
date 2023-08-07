@@ -4,6 +4,7 @@ use num_traits::sign::Signed;
 use uuid::Uuid;
 
 use std::cmp::Ordering;
+use std::collections::vec_deque::Iter;
 use std::collections::VecDeque;
 use std::convert::TryFrom;
 use std::convert::TryInto;
@@ -1582,6 +1583,10 @@ impl Tuple {
 
     pub(crate) fn get_element(&self, index: usize) -> Option<&TupleValue> {
         self.elements.get(index)
+    }
+
+    pub(crate) fn iter(&self) -> Iter<'_, TupleValue> {
+        self.elements.iter()
     }
 }
 

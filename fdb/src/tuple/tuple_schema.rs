@@ -9,6 +9,31 @@ use crate::tuple::{Tuple, TupleValue};
 /// [`TupleSchemaElement`]s. [`TupleSchema::validate`] method can be
 /// used to verify the conformance of a value of [`Tuple`] to its
 /// schema.
+//
+// In the design of `TupleSchema`, when you have a
+// `TupleValue::NullValue`, semantically, it could mean
+//
+//   1. `TupleSchemaElement::Null` or
+//
+//   2. `TupleSchemaElement::Maybe{Bytes,String,Tuple(_),Integer,
+//       Float,Double,Boolean,Uuid,Versionstamp}`.
+//
+// There is really no way to know just by looking at
+// `TupleValue::NullValue`, what schema element it might refer to.
+//
+// Likewise when you have a `TupleValue::NestedTuple(_)`, semantically
+// it could mean
+//
+//   1. `TupleSchemaElement::Tuple(_)` or
+//
+//   2. `TupleSchemaElement::ListOf{Bytes,String,Tuple(_), Integer,
+//       Float,Double,Boolean,Uuid,Versionstamp}`.
+//
+// So, when you have a tuple value `((1, 2, 3,), "abcd")`, there is
+// really no way to know just by looking at the value if the user
+// wanted a schema of `((Integer, Integer, Integer), String)` or if
+// the user wanted a schema `(ListOfInteger, String)`. This
+// information must be captured elsewhere.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TupleSchema {
     elements: VecDeque<TupleSchemaElement>,
@@ -148,6 +173,37 @@ pub enum TupleSchemaElement {
     ///
     /// [`Versionstamp`]: crate::tuple::Versionstamp
     MaybeVersionstamp,
+    /// List of [`Bytes`] value
+    ///
+    /// [`Bytes`]: bytes::Bytes
+    ListOfBytes,
+    /// List of [`String`] value
+    ListOfString,
+    /// List of [`Tuple`] value
+    ListOfTuple(TupleSchema),
+    /// List of integer value
+    ///
+    /// ## Note
+    ///
+    /// Integer value can be a [`i8`], [`i16`], [`i32`], [`i64`] or
+    /// [`BigInt`].
+    ///
+    /// [`BigInt`]: num_bigint::BigInt
+    ListOfInteger,
+    /// List of [`f32`] value
+    ListOfFloat,
+    /// List of [`f64`] value
+    ListOfDouble,
+    /// List of [`bool`] value
+    ListOfBoolean,
+    /// List of [`Uuid`] value
+    ///
+    /// [`Uuid`]: uuid::Uuid
+    ListOfUuid,
+    /// List of [`Versionstamp`] value
+    ///
+    /// [`Versionstamp`]: crate::tuple::Versionstamp
+    ListOfVersionstamp,
 }
 
 trait Visitor {
@@ -310,6 +366,213 @@ impl<'t> Visitor for TupleVisitor<'t> {
             TupleSchemaElement::MaybeVersionstamp => {
                 matches!(tuple_value, TupleValue::Versionstamp96Bit(_))
                     || matches!(tuple_value, TupleValue::NullValue)
+            }
+            TupleSchemaElement::ListOfBytes => {
+                if let TupleValue::NestedTuple(tup) = tuple_value {
+                    let mut res = true;
+
+                    let iter = tup.iter();
+
+                    for x in iter {
+                        if matches!(x, TupleValue::ByteString(_)) {
+                            continue;
+                        } else {
+                            res = false;
+                            break;
+                        }
+                    }
+
+                    res
+                } else {
+                    false
+                }
+            }
+            TupleSchemaElement::ListOfString => {
+                if let TupleValue::NestedTuple(tup) = tuple_value {
+                    let mut res = true;
+
+                    let iter = tup.iter();
+
+                    for x in iter {
+                        if matches!(x, TupleValue::UnicodeString(_)) {
+                            continue;
+                        } else {
+                            res = false;
+                            break;
+                        }
+                    }
+
+                    res
+                } else {
+                    false
+                }
+            }
+            TupleSchemaElement::ListOfTuple(ts) => {
+                if let TupleValue::NestedTuple(tup) = tuple_value {
+                    let mut res = true;
+
+                    let iter = tup.iter();
+
+                    for x in iter {
+                        if let TupleValue::NestedTuple(t) = x {
+                            let mut tv = TupleVisitor::new(t);
+
+                            if walk_tuple_schema(&mut tv, ts) {
+                                continue;
+                            } else {
+                                res = false;
+                                break;
+                            }
+                        } else {
+                            res = false;
+                            break;
+                        }
+                    }
+
+                    res
+                } else {
+                    false
+                }
+            }
+            TupleSchemaElement::ListOfInteger => {
+                if let TupleValue::NestedTuple(tup) = tuple_value {
+                    let mut res = true;
+
+                    let iter = tup.iter();
+
+                    for x in iter {
+                        if matches!(x, TupleValue::NegativeArbitraryPrecisionInteger(_))
+                            || matches!(x, TupleValue::NegInt8(_))
+                            || matches!(x, TupleValue::NegInt7(_))
+                            || matches!(x, TupleValue::NegInt6(_))
+                            || matches!(x, TupleValue::NegInt5(_))
+                            || matches!(x, TupleValue::NegInt4(_))
+                            || matches!(x, TupleValue::NegInt3(_))
+                            || matches!(x, TupleValue::NegInt2(_))
+                            || matches!(x, TupleValue::NegInt1(_))
+                            || matches!(x, TupleValue::IntZero)
+                            || matches!(x, TupleValue::PosInt1(_))
+                            || matches!(x, TupleValue::PosInt2(_))
+                            || matches!(x, TupleValue::PosInt3(_))
+                            || matches!(x, TupleValue::PosInt4(_))
+                            || matches!(x, TupleValue::PosInt5(_))
+                            || matches!(x, TupleValue::PosInt6(_))
+                            || matches!(x, TupleValue::PosInt7(_))
+                            || matches!(x, TupleValue::PosInt8(_))
+                            || matches!(x, TupleValue::PositiveArbitraryPrecisionInteger(_))
+                        {
+                            continue;
+                        } else {
+                            res = false;
+                            break;
+                        }
+                    }
+
+                    res
+                } else {
+                    false
+                }
+            }
+            TupleSchemaElement::ListOfFloat => {
+                if let TupleValue::NestedTuple(tup) = tuple_value {
+                    let mut res = true;
+
+                    let iter = tup.iter();
+
+                    for x in iter {
+                        if matches!(x, TupleValue::IeeeBinaryFloatingPointFloat(_)) {
+                            continue;
+                        } else {
+                            res = false;
+                            break;
+                        }
+                    }
+
+                    res
+                } else {
+                    false
+                }
+            }
+            TupleSchemaElement::ListOfDouble => {
+                if let TupleValue::NestedTuple(tup) = tuple_value {
+                    let mut res = true;
+
+                    let iter = tup.iter();
+
+                    for x in iter {
+                        if matches!(x, TupleValue::IeeeBinaryFloatingPointDouble(_)) {
+                            continue;
+                        } else {
+                            res = false;
+                            break;
+                        }
+                    }
+
+                    res
+                } else {
+                    false
+                }
+            }
+            TupleSchemaElement::ListOfBoolean => {
+                if let TupleValue::NestedTuple(tup) = tuple_value {
+                    let mut res = true;
+
+                    let iter = tup.iter();
+
+                    for x in iter {
+                        if matches!(x, TupleValue::FalseValue) || matches!(x, TupleValue::TrueValue)
+                        {
+                            continue;
+                        } else {
+                            res = false;
+                            break;
+                        }
+                    }
+
+                    res
+                } else {
+                    false
+                }
+            }
+            TupleSchemaElement::ListOfUuid => {
+                if let TupleValue::NestedTuple(tup) = tuple_value {
+                    let mut res = true;
+
+                    let iter = tup.iter();
+
+                    for x in iter {
+                        if matches!(x, TupleValue::Rfc4122Uuid(_)) {
+                            continue;
+                        } else {
+                            res = false;
+                            break;
+                        }
+                    }
+
+                    res
+                } else {
+                    false
+                }
+            }
+            TupleSchemaElement::ListOfVersionstamp => {
+                if let TupleValue::NestedTuple(tup) = tuple_value {
+                    let mut res = true;
+
+                    let iter = tup.iter();
+
+                    for x in iter {
+                        if matches!(x, TupleValue::Versionstamp96Bit(_)) {
+                            continue;
+                        } else {
+                            res = false;
+                            break;
+                        }
+                    }
+
+                    res
+                } else {
+                    false
+                }
             }
         };
 
@@ -477,14 +740,18 @@ mod tests {
             let mut ts = TupleSchema::new();
             ts.push_back(TupleSchemaElement::Tuple({
                 let mut ts_inner = TupleSchema::new();
+
                 ts_inner.push_back(TupleSchemaElement::Null);
+
                 ts_inner
             }));
 
             let mut t = Tuple::new();
             t.push_back::<Tuple>({
                 let mut t_inner = Tuple::new();
+
                 t_inner.push_back::<Null>(Null);
+
                 t_inner
             });
             assert!(ts.validate(&t));
@@ -1066,6 +1333,408 @@ mod tests {
             t.push_back::<Null>(Null);
             assert!(ts.validate(&t));
         }
+
+        {
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::ListOfBytes);
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>(Tuple::new());
+            assert!(ts.validate(&t));
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>({
+                let mut tup_inner = Tuple::new();
+
+                tup_inner.push_back::<Bytes>(Bytes::from_static(b"hello_world1"));
+                tup_inner.push_back::<Bytes>(Bytes::from_static(b"hello_world2"));
+
+                tup_inner
+            });
+            assert!(ts.validate(&t));
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>({
+                let mut tup_inner = Tuple::new();
+
+                tup_inner.push_back::<Bytes>(Bytes::from_static(b"hello_world1"));
+                tup_inner.push_back::<Null>(Null);
+
+                tup_inner
+            });
+            assert!(!ts.validate(&t));
+        }
+
+        {
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::ListOfString);
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>(Tuple::new());
+            assert!(ts.validate(&t));
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>({
+                let mut tup_inner = Tuple::new();
+
+                tup_inner.push_back::<String>("hello_world1".to_string());
+                tup_inner.push_back::<String>("hello_world2".to_string());
+
+                tup_inner
+            });
+            assert!(ts.validate(&t));
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>({
+                let mut tup_inner = Tuple::new();
+
+                tup_inner.push_back::<Null>(Null);
+                tup_inner.push_back::<String>("hello_world1".to_string());
+
+                tup_inner
+            });
+            assert!(!ts.validate(&t));
+        }
+
+        {
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::ListOfTuple({
+                let mut ts_inner = TupleSchema::new();
+
+                ts_inner.push_back(TupleSchemaElement::String);
+                ts_inner.push_back(TupleSchemaElement::Null);
+
+                ts_inner
+            }));
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>(Tuple::new());
+            assert!(ts.validate(&t));
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>({
+                let mut tup_inner = Tuple::new();
+
+                tup_inner.push_back::<Tuple>({
+                    let mut tup_inner1 = Tuple::new();
+
+                    tup_inner1.push_back::<String>("hello_world1".to_string());
+                    tup_inner1.push_back::<Null>(Null);
+
+                    tup_inner1
+                });
+                tup_inner.push_back::<Tuple>({
+                    let mut tup_inner1 = Tuple::new();
+
+                    tup_inner1.push_back::<String>("hello_world2".to_string());
+                    tup_inner1.push_back::<Null>(Null);
+
+                    tup_inner1
+                });
+
+                tup_inner
+            });
+            assert!(ts.validate(&t));
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>({
+                let mut tup_inner = Tuple::new();
+
+                tup_inner.push_back::<Tuple>({
+                    let mut tup_inner1 = Tuple::new();
+
+                    tup_inner1.push_back::<String>("hello_world1".to_string());
+                    tup_inner1.push_back::<Null>(Null);
+
+                    tup_inner1
+                });
+                tup_inner.push_back::<Tuple>({
+                    let mut tup_inner1 = Tuple::new();
+
+                    tup_inner1.push_back::<Null>(Null);
+                    tup_inner1.push_back::<String>("hello_world2".to_string());
+
+                    tup_inner1
+                });
+
+                tup_inner
+            });
+            assert!(!ts.validate(&t));
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>({
+                let mut tup_inner = Tuple::new();
+
+                tup_inner.push_back::<Tuple>({
+                    let mut tup_inner1 = Tuple::new();
+
+                    tup_inner1.push_back::<String>("hello_world1".to_string());
+                    tup_inner1.push_back::<Null>(Null);
+
+                    tup_inner1
+                });
+                tup_inner.push_back::<Null>(Null);
+
+                tup_inner
+            });
+            assert!(!ts.validate(&t));
+        }
+
+        {
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::ListOfInteger);
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>(Tuple::new());
+            assert!(ts.validate(&t));
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>({
+                let mut tup_inner = Tuple::new();
+
+                tup_inner.push_back::<BigInt>(
+                    BigInt::parse_bytes(b"-18446744073709551616", 10).unwrap(),
+                );
+                tup_inner.push_back::<BigInt>(
+                    BigInt::parse_bytes(b"-18446744073709551615", 10).unwrap(),
+                );
+                tup_inner
+                    .push_back::<BigInt>(BigInt::parse_bytes(b"-9223372036854775809", 10).unwrap());
+                tup_inner.push_back::<i64>(i64::MIN);
+                tup_inner.push_back::<i64>(-72057594037927936);
+                tup_inner.push_back::<i64>(-72057594037927935);
+                tup_inner.push_back::<i64>(-281474976710656);
+                tup_inner.push_back::<i64>(-281474976710655);
+                tup_inner.push_back::<i64>(-1099511627776);
+                tup_inner.push_back::<i64>(-1099511627775);
+                tup_inner.push_back::<i64>(-4294967296);
+                tup_inner.push_back::<i64>(-4294967295);
+                tup_inner.push_back::<i64>(-2147483649);
+                tup_inner.push_back::<i32>(i32::MIN);
+                tup_inner.push_back::<i32>(-16777216);
+                tup_inner.push_back::<i32>(-16777215);
+                tup_inner.push_back::<i32>(-65536);
+                tup_inner.push_back::<i32>(-65535);
+                tup_inner.push_back::<i32>(-32769);
+                tup_inner.push_back::<i16>(i16::MIN);
+                tup_inner.push_back::<i16>(-256);
+                tup_inner.push_back::<i16>(-255);
+                tup_inner.push_back::<i16>(-129);
+                tup_inner.push_back::<i8>(i8::MIN);
+                tup_inner.push_back::<i8>(0);
+                tup_inner.push_back::<i8>(i8::MAX);
+                tup_inner.push_back::<i16>(128);
+                tup_inner.push_back::<i16>(255);
+                tup_inner.push_back::<i16>(256);
+                tup_inner.push_back::<i16>(i16::MAX);
+                tup_inner.push_back::<i32>(32768);
+                tup_inner.push_back::<i32>(65535);
+                tup_inner.push_back::<i32>(65536);
+                tup_inner.push_back::<i32>(16777215);
+                tup_inner.push_back::<i32>(16777216);
+                tup_inner.push_back::<i32>(i32::MAX);
+                tup_inner.push_back::<i64>(2147483648);
+                tup_inner.push_back::<i64>(4294967295);
+                tup_inner.push_back::<i64>(4294967296);
+                tup_inner.push_back::<i64>(1099511627775);
+                tup_inner.push_back::<i64>(1099511627776);
+                tup_inner.push_back::<i64>(281474976710655);
+                tup_inner.push_back::<i64>(281474976710656);
+                tup_inner.push_back::<i64>(72057594037927935);
+                tup_inner.push_back::<i64>(72057594037927936);
+                tup_inner.push_back::<i64>(i64::MAX);
+                tup_inner
+                    .push_back::<BigInt>(BigInt::parse_bytes(b"9223372036854775808", 10).unwrap());
+                tup_inner
+                    .push_back::<BigInt>(BigInt::parse_bytes(b"18446744073709551615", 10).unwrap());
+                tup_inner
+                    .push_back::<BigInt>(BigInt::parse_bytes(b"18446744073709551616", 10).unwrap());
+
+                tup_inner
+            });
+            assert!(ts.validate(&t));
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>({
+                let mut tup_inner = Tuple::new();
+
+                tup_inner.push_back::<i8>(0);
+                tup_inner.push_back::<Null>(Null);
+
+                tup_inner
+            });
+            assert!(!ts.validate(&t));
+        }
+
+        {
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::ListOfFloat);
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>(Tuple::new());
+            assert!(ts.validate(&t));
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>({
+                let mut tup_inner = Tuple::new();
+
+                tup_inner.push_back::<f32>(3.14f32);
+                tup_inner.push_back::<f32>(-3.14f32);
+
+                tup_inner
+            });
+            assert!(ts.validate(&t));
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>({
+                let mut tup_inner = Tuple::new();
+
+                tup_inner.push_back::<f32>(3.14f32);
+                tup_inner.push_back::<Null>(Null);
+
+                tup_inner
+            });
+            assert!(!ts.validate(&t));
+        }
+
+        {
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::ListOfDouble);
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>(Tuple::new());
+            assert!(ts.validate(&t));
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>({
+                let mut tup_inner = Tuple::new();
+
+                tup_inner.push_back::<f64>(3.14f64);
+                tup_inner.push_back::<f64>(-3.14f64);
+
+                tup_inner
+            });
+            assert!(ts.validate(&t));
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>({
+                let mut tup_inner = Tuple::new();
+
+                tup_inner.push_back::<Null>(Null);
+                tup_inner.push_back::<f64>(3.14f64);
+
+                tup_inner
+            });
+            assert!(!ts.validate(&t));
+        }
+
+        {
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::ListOfBoolean);
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>(Tuple::new());
+            assert!(ts.validate(&t));
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>({
+                let mut tup_inner = Tuple::new();
+
+                tup_inner.push_back::<bool>(true);
+                tup_inner.push_back::<bool>(false);
+
+                tup_inner
+            });
+            assert!(ts.validate(&t));
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>({
+                let mut tup_inner = Tuple::new();
+
+                tup_inner.push_back::<bool>(true);
+                tup_inner.push_back::<Null>(Null);
+
+                tup_inner
+            });
+            assert!(!ts.validate(&t));
+        }
+
+        {
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::ListOfUuid);
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>(Tuple::new());
+            assert!(ts.validate(&t));
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>({
+                let mut tup_inner = Tuple::new();
+
+                tup_inner.push_back::<Uuid>(
+                    Uuid::parse_str("ffffffff-ba5e-ba11-0000-00005ca1ab1e").unwrap(),
+                );
+                tup_inner.push_back::<Uuid>(
+                    Uuid::parse_str("ffffffff-ba5e-ba11-0000-00005ca1ab1e").unwrap(),
+                );
+
+                tup_inner
+            });
+            assert!(ts.validate(&t));
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>({
+                let mut tup_inner = Tuple::new();
+
+                tup_inner.push_back::<Uuid>(
+                    Uuid::parse_str("ffffffff-ba5e-ba11-0000-00005ca1ab1e").unwrap(),
+                );
+                tup_inner.push_back::<Null>(Null);
+
+                tup_inner
+            });
+            assert!(!ts.validate(&t));
+        }
+
+        {
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::ListOfVersionstamp);
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>(Tuple::new());
+            assert!(ts.validate(&t));
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>({
+                let mut tup_inner = Tuple::new();
+
+                tup_inner.push_back::<Versionstamp>(Versionstamp::complete(
+                    Bytes::from_static(&b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"[..]),
+                    657,
+                ));
+                tup_inner.push_back::<Versionstamp>(Versionstamp::complete(
+                    Bytes::from_static(&b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"[..]),
+                    657,
+                ));
+
+                tup_inner
+            });
+            assert!(ts.validate(&t));
+
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>({
+                let mut tup_inner = Tuple::new();
+
+                tup_inner.push_back::<Null>(Null);
+                tup_inner.push_back::<Versionstamp>(Versionstamp::complete(
+                    Bytes::from_static(&b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A"[..]),
+                    657,
+                ));
+
+                tup_inner
+            });
+            assert!(!ts.validate(&t));
+        }
     }
 
     #[test]
@@ -1186,6 +1855,139 @@ mod tests {
         });
 
         assert!(ts.validate(&t));
+    }
+
+    #[test]
+    fn validate_tuple_value_schema_relationship() {
+        {
+            let mut t = Tuple::new();
+            t.push_back::<Null>(Null);
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::Null);
+            assert!(ts.validate(&t));
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::MaybeBytes);
+            assert!(ts.validate(&t));
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::MaybeString);
+            assert!(ts.validate(&t));
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::MaybeTuple({
+                let mut ts_inner = TupleSchema::new();
+                ts_inner.push_back(TupleSchemaElement::Null);
+                ts_inner
+            }));
+            assert!(ts.validate(&t));
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::MaybeInteger);
+            assert!(ts.validate(&t));
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::MaybeFloat);
+            assert!(ts.validate(&t));
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::MaybeDouble);
+            assert!(ts.validate(&t));
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::MaybeBoolean);
+            assert!(ts.validate(&t));
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::MaybeUuid);
+            assert!(ts.validate(&t));
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::MaybeVersionstamp);
+            assert!(ts.validate(&t));
+        }
+
+        {
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>(Tuple::new());
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::Tuple(TupleSchema::new()));
+            assert!(ts.validate(&t));
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::ListOfBytes);
+            assert!(ts.validate(&t));
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::ListOfString);
+            assert!(ts.validate(&t));
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::ListOfTuple({
+                let mut ts_inner = TupleSchema::new();
+                ts_inner.push_back(TupleSchemaElement::Null);
+                ts_inner
+            }));
+            assert!(ts.validate(&t));
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::ListOfInteger);
+            assert!(ts.validate(&t));
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::ListOfFloat);
+            assert!(ts.validate(&t));
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::ListOfDouble);
+            assert!(ts.validate(&t));
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::ListOfBoolean);
+            assert!(ts.validate(&t));
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::ListOfUuid);
+            assert!(ts.validate(&t));
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::ListOfVersionstamp);
+            assert!(ts.validate(&t));
+
+            // Tuple of value `((1, 2, 3,), "abcd")` can be a value of
+            // two different schemas.
+            let mut t = Tuple::new();
+            t.push_back::<Tuple>({
+                let mut t_inner = Tuple::new();
+
+                t_inner.push_back::<i8>(1);
+                t_inner.push_back::<i8>(2);
+                t_inner.push_back::<i8>(3);
+
+                t_inner
+            });
+            t.push_back::<String>("abcd".to_string());
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::Tuple({
+                let mut ts_inner = TupleSchema::new();
+
+                ts_inner.push_back(TupleSchemaElement::Integer);
+                ts_inner.push_back(TupleSchemaElement::Integer);
+                ts_inner.push_back(TupleSchemaElement::Integer);
+
+                ts_inner
+            }));
+            ts.push_back(TupleSchemaElement::String);
+            assert!(ts.validate(&t));
+
+            let mut ts = TupleSchema::new();
+            ts.push_back(TupleSchemaElement::ListOfInteger);
+            ts.push_back(TupleSchemaElement::String);
+            assert!(ts.validate(&t));
+        }
     }
 
     #[test]
