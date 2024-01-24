@@ -1,5 +1,6 @@
-use std::collections::vec_deque::Iter;
+use std::collections::vec_deque::{IntoIter, Iter};
 use std::collections::VecDeque;
+use std::iter::IntoIterator;
 
 use crate::tuple::{Tuple, TupleValue};
 
@@ -101,6 +102,16 @@ impl TupleSchema {
 impl Default for TupleSchema {
     fn default() -> TupleSchema {
         TupleSchema::new()
+    }
+}
+
+impl IntoIterator for TupleSchema {
+    type Item = TupleSchemaElement;
+
+    type IntoIter = IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+	self.elements.into_iter()
     }
 }
 
